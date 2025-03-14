@@ -55,7 +55,7 @@ void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sect
     le32write_postinc(dataptr, 0);
     le32write_postinc(dataptr, 0);
     le32write_postinc(dataptr, 0);
-    le32write_postinc(dataptr, getEntryPoint(sectionRvaSet, entry));
+    le32write_postinc(dataptr, getEntryPoint(sectionRvaSet, imagebase, entry));
     le32write_postinc(dataptr, 0);
     le32write_postinc(dataptr, 0);
     le32write_postinc(dataptr, imagebase);
@@ -234,12 +234,16 @@ u32pair_t ElfPeHeader::getMachInfo() const
 
 uint32_t ElfPeHeader::getEntryPoint
 (const std::vector<section_mapping_t> &secmap,
+ uint32_t imageBase,
  const ElfObjectFile::Symbol *entry) const
 {
     if(entry == NULL) return computeSize();
     for(int i = 0; i < secmap.size(); i++) {
-	if(secmap[i].index == entry->section)
-	    return secmap[i].rva + entry->offset;
+	if(secmap[i].index == entry->section) {
+	    auto ep = secmap[i].rva - imageBase + entry->offset;
+	    fprintf(stderr, "entrypoint %08x %08x -> %08x\n", (unsigned int)secmap[i].rva, (unsigned int)entry->offset, (unsigned int)ep);
+	    return ep;
+	}
     }
     return computeSize();
 }

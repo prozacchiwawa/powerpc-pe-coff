@@ -20,12 +20,15 @@ void AddReloc
         *GetRelocTarget(reloc, relocAddrOff) = newReloc & ~0xfff;
         relptr = &reloc[2 * sizeof(uint32_t)];
     }
-    else if (type != -1 && ((newReloc & ~0xfff) != *GetRelocTarget(reloc, relocAddrOff)))
+    else if ((newReloc & ~0xfff) != *GetRelocTarget(reloc, relocAddrOff))
     {
         reloc.resize(reloc.size() + 2 * sizeof(uint32_t) + sizeof(uint16_t) + oddsize);
         relptr = &reloc[oldsize + oddsize];
         uint8_t *oldptr = (uint8_t*)GetRelocTarget(reloc, relocAddrOff);
-        le32write_postinc(oldptr, *GetRelocTarget(reloc, relocAddrOff) - imageBase);
+        auto oldValue = *((uint32_t *)oldptr);
+        auto newValue = oldValue;
+        printf("type %d relocAddrOff %08x newReloc %08x oldValue %08x newValue %08x\n", type, (unsigned int)relocAddrOff, (unsigned int)oldValue, (unsigned int)newValue);
+        le32write_postinc(oldptr, newValue);
         le32write_postinc(oldptr, relptr - &reloc[0] - relocAddrOff);
         relocAddrOff = relptr - &reloc[0];
         *GetRelocTarget(reloc, relocAddrOff) = newReloc & ~0xfff;
@@ -70,7 +73,7 @@ void SingleReloc
     P = reloc.r_offset + FindRVA(rvas, target.getNumber());
     //printf("start of target elf section %08x\n", target.getStartRva());
 
-#if 0
+//#if 0
     printf("SYMBOL: value %08x size %08x info %02x other %02x shndx %08x total %08x\n",
            symbol.st_value,
            symbol.st_size,
@@ -78,7 +81,7 @@ void SingleReloc
            symbol.st_other,
            symbol.st_shndx,
            S);
-#endif
+//#endif
 
     uint8_t *Target = TargetPtr(rvas, target, P);
     uint8_t *tword = TargetPtr(rvas, target, P & ~3);
@@ -94,7 +97,7 @@ void SingleReloc
     case R_PPC_ADDR32:
         printf("ADDR32 S %08x A %08x P %08x\n", S, A, P);
         le32write(Target, S + A);
-        AddReloc(relocSect, imageBase, relocAddr, P, 3);
+        AddReloc(relocSect, imageBase, relocAddr, P - imageBase, 3);
         break;
     case R_PPC_REL32:
         //printf("REL32 S %08x A %08x P %08x\n", S, A, P);
@@ -107,18 +110,18 @@ void SingleReloc
     case R_PPC_REL24:
         //printf("REL24 S %08x A %08x P %08x\n", S, A, P);
         //printf("New Offset: %08x to Addr %08x from %08x\n", S+A-P, S+A, P);
-        le32write(Target, ((S+A-P) & ~ADDR24_MASK) | (be32read(Target) & ADDR24_MASK));
+        le32write(Target, ((S+A-P) & ~ADDR24_MASK) | (le32read(Target) & ADDR24_MASK));
         break;
     case R_PPC_ADDR16_LO:
         //printf("ADDR16_LO S %08x A %08x P %08x\n", S, A, P);
         le16write(Target, S + A);
-        AddReloc(relocSect, imageBase, relocAddr, P, 2);
+        AddReloc(relocSect, imageBase, relocAddr, P - imageBase, 2);
         break;
     case R_PPC_ADDR16_HA:
         //printf("ADDR16_HA S %08x A %08x P %08x\n", S, A, P);
         le16write(Target, (S + A + 0x8000) >> 16);
-        AddReloc(relocSect, imageBase, relocAddr, P, 4);
-        AddReloc(relocSect, imageBase, relocAddr, S + A, -1);
+        AddReloc(relocSect, imageBase, relocAddr, P - imageBase, 4);
+        // AddReloc(relocSect, imageBase, relocAddr, S + A, -1);
         break;
     default:
         break;

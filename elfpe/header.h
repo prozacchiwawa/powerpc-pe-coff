@@ -27,9 +27,14 @@ public:
     void createHeaderSection(const std::vector<section_mapping_t> &rvas, uint32_t imageSize);
 
 private:
-    uint32_t getEntryPoint(const std::vector<section_mapping_t> &rvas, const ElfObjectFile::Symbol *entry) const;
+    uint32_t getEntryPoint(const std::vector<section_mapping_t> &rvas, uint32_t imageBase, const ElfObjectFile::Symbol *entry) const;
     int computeSize() const;
-    int getExeFlags() const { return 0; }
+    int getExeFlags() const { return 0x0306; }
+    // Characteristics                             0306
+    //   Executable Image
+    //   Line numbers stripped
+    //   32 bit word machine
+    //   Debugging information stripped
     int getDllFlags() const { return dll ? IMAGE_FILE_DLL : 0; }
     u32pair_t getExportInfo(const std::vector<section_mapping_t> &rvas) const;
     u32pair_t getImportInfo(const std::vector<section_mapping_t> &rvas) const;
