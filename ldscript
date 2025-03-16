@@ -1,0 +1,61 @@
+/* Default linker script, for normal executables */
+OUTPUT_FORMAT("elf32-powerpc", "elf32-powerpc",
+	      "elf32-powerpc")
+OUTPUT_ARCH(powerpc:common)
+SECTIONS
+{
+  .text :
+  {
+    __text_start__ = .;
+    *(.text)
+    *(init)
+    *(INIT)
+    __text_end__ = .;
+    . = ALIGN(4096);
+  }
+  .data :
+  {
+    *(.data)
+    *(.data2)
+    *(.rdata)
+    *(.sdata)
+    *(.pdata)
+    . = ALIGN(4096);
+  }
+  .rodata :
+  {
+    *(.rodata)
+    *(.rodata.*)
+    *(.got2)
+    *(.eh_frame)
+    . = ALIGN(4096);
+  }
+  .idata :
+  {
+     *(.idata$2)
+     SORT(*)(.idata$3)
+     LONG(0); LONG(0); LONG(0); LONG(0); LONG(0);
+     SORT(*)(.idata$4)
+     SORT(*)(.idata$5)
+     SORT(*)(.idata$6)
+     SORT(*)(.idata$7)
+     . = ALIGN(4096);
+  }
+  .edata :
+  {
+    *(.edata)
+    . = ALIGN(4096);
+  }
+  .bss :
+  {
+    *(.sbss)
+    *(.bss)
+    *(COMMON)
+    . = ALIGN(4096);
+  }
+  .rsrc :
+  {
+    *(.rsrc)
+    . = ALIGN(4096);
+  }
+}
