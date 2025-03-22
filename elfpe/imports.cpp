@@ -4,6 +4,12 @@
 #include "objectfile.h"
 #include "section.h"
 
+static std::string idata_name(int i) {
+    std::ostringstream idata_name;
+    idata_name << ".idata$" << i;
+    return idata_name.str();
+}
+
 void ImportFixup
 (ElfObjectFile &eof,
  const std::vector<section_mapping_t> &mapping)
@@ -11,9 +17,10 @@ void ImportFixup
     const ElfObjectFile::Section *importSect = eof.getNamedSection(".idata");
     if (!importSect) return;
     uint8_t *importTable = importSect->getSectionData();
-    uint8_t *importTarget = importTable, *tableAddr, *hintName;
+    uint8_t *importTarget = importTable, *hintName;
     uint32_t importRva = FindRVA(mapping, importSect->getNumber());
-    uint32_t tableRva, iatRva, hintNameEntry;
+    uint32_t iatBegin = 0, iatEnd = 0, hint;
+    uint32_t tableRva, iatRva;
 
     do
     {
@@ -23,32 +30,37 @@ void ImportFixup
         le32write_postinc(importTarget, le32read(importTarget));
         le32write_postinc(importTarget, (iatRva = le32read(importTarget)));
 
-        if (!tableRva) return;
+        if (!tableRva) {
+            break;
+        }
 
         // Rewrite the import lookup table
-        tableAddr = importTable + tableRva - importRva;
-        fprintf(stderr, "ImportFixup table at tableRva %08x importRva %08x\n", tableRva, importRva);
-        while (hintNameEntry = le32read(tableAddr))
-        {
-            le32write_postinc(tableAddr, hintNameEntry);
-            // Rewrite the hint/name element
-            //hintName = importTable + hintNameEntry - importRva;
-            //le16write(hintName, be16read(hintName));
+        auto hintTableOffset = tableRva - importRva;
+        auto hintTablePtr = hintTableOffset + importTable;
+
+        auto iatTableOffset = iatRva - importRva;
+        auto iatTablePtr = iatTableOffset + importTable;
+
+        hintName = hintTablePtr;
+        while ((hint = le32read_postinc(hintTablePtr))) {
+            printf(" import hint %08x\n", hint);
+            le32write_postinc(iatTablePtr, hint);
+            printf(" import shadow %08x\n", hint);
+        }
+
+        auto iatMax = (hintTablePtr - hintName) + iatRva;
+
+        if (iatBegin == 0 || iatRva < iatBegin) {
+            iatBegin = iatRva;
+        }
+        if (iatEnd == 0 || iatMax > iatEnd) {
+            iatEnd = iatMax;
         }
 
         // Do the second address table
-        tableAddr = importTable + iatRva - importRva;
-        while (hintNameEntry = le32read(tableAddr))
-        {
-            le32write_postinc(tableAddr, hintNameEntry);
-        }
     } while(1);
-}
 
-static std::string idata_name(int i) {
-    std::ostringstream idata_name;
-    idata_name << ".idata$" << i;
-    return idata_name.str();
+    eof.setIat(std::make_pair(iatBegin, iatEnd - iatBegin));
 }
 
 // We'll create the new section and a fixed up relocation section for it.

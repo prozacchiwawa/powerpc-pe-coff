@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 #include <libelf.h>
+#include "u32pair.h"
 
 class ElfObjectFile {
 public:
@@ -131,6 +132,15 @@ public:
     void removeSection(const std::string &name);
     const Section *findRelocSection(int for_section);
 
+    void setIat(const u32pair_t &iat) {
+        printf("set iat %08x %08x\n", iat.first, iat.second);
+        this->iat = iat;
+    }
+
+    u32pair_t getIat() const {
+        return this->iat;
+    }
+
 private:
     int fd;
     int shnum, phnum;
@@ -142,6 +152,7 @@ private:
     std::map<std::string, const Section *> sections_by_name;
     std::vector<Symbol*> symbols;
     std::map<std::string, const Symbol *> symbols_by_name;
+    u32pair_t iat;
 
     void init();
     void finalize();

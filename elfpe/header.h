@@ -35,7 +35,7 @@ private:
     //   Line numbers stripped
     //   32 bit word machine
     //   Debugging information stripped
-    int getDllFlags() const { return dll ? IMAGE_FILE_DLL : 0; }
+    int getDllFlags() const { return 0x40; }
     u32pair_t getExportInfo(const std::vector<section_mapping_t> &rvas) const;
     u32pair_t getImportInfo(const std::vector<section_mapping_t> &rvas) const;
     u32pair_t getResourceInfo(const std::vector<section_mapping_t> &rvas) const;

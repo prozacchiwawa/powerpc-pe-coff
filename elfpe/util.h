@@ -4,6 +4,7 @@
 #include <vector>
 #include <utility>
 #include <stdint.h>
+#include "u32pair.h"
 #include "objectfile.h"
 #include "section.h"
 
@@ -23,7 +24,6 @@ uint16_t be16read(uint8_t *dataptr);
 uint16_t be16read_postinc(uint8_t *&dataptr);
 uint32_t be32read(uint8_t *dataptr);
 uint32_t be32read_postinc(uint8_t *&dataptr);
-typedef std::pair<uint32_t, uint32_t> u32pair_t;
 void le32pwrite_postinc(uint8_t *&dataptr, const u32pair_t &pair);
 void le32pwrite(uint8_t *dataptr, const u32pair_t &pair);
 uint32_t roundup(uint32_t value, int round);

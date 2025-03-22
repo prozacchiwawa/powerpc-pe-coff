@@ -78,7 +78,7 @@ void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sect
     le32write_postinc(dataptr, heapreserve);
     le32write_postinc(dataptr, heapcommit);
     le32write_postinc(dataptr, 0);
-    le32write_postinc(dataptr, 10); // # Directories
+    le32write_postinc(dataptr, 16); // # Directories
     // "Directories"
     le32pwrite_postinc(dataptr, getExportInfo(sectionRvaSet));
     le32pwrite_postinc(dataptr, getImportInfo(sectionRvaSet));
@@ -90,6 +90,12 @@ void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sect
     le32pwrite_postinc(dataptr, getDescrInfo());
     le32pwrite_postinc(dataptr, getMachInfo());
     le32pwrite_postinc(dataptr, getTlsInfo());
+    le32pwrite_postinc(dataptr, std::pair(0,0));
+    le32pwrite_postinc(dataptr, std::pair(0,0));
+    le32pwrite_postinc(dataptr, this->eof->getIat());
+    le32pwrite_postinc(dataptr, std::pair(0,0));
+    le32pwrite_postinc(dataptr, std::pair(0,0));
+    le32pwrite_postinc(dataptr, std::pair(0,0));
     // Fixup size of optional header
     le16write
 	(&data[0] + optHeaderSizeMember,
@@ -102,34 +108,42 @@ void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sect
     uint32_t paddr = computeSize();
     for (int i = 0; i < sectionRvaSet.size(); i++)
     {
-	section_mapping_t mapping = sectionRvaSet[i];
-	const ElfObjectFile::Section *section = mapping.section;
-	std::string name = section->getName();
-	uint32_t size = section->logicalSize();
-        uint32_t psize = 
-	    section->getType() == SHT_NOBITS ? 0 : roundup(size, filealign);
-	uint32_t rva = mapping.rva;
-	for (int j = 0; j < 8; j++)
-	{
-	    *dataptr++ = j < name.size() ? name[j] : '\000';
-	}
+      section_mapping_t mapping = sectionRvaSet[i];
+      const ElfObjectFile::Section *section = mapping.section;
+      std::string name = section->getName();
+      uint32_t size = section->logicalSize();
+      uint32_t psize =
+        section->getType() == SHT_NOBITS ? 0 : roundup(size, filealign);
+      uint32_t rva = mapping.rva;
+      for (int j = 0; j < 8; j++)
+        {
+          *dataptr++ = j < name.size() ? name[j] : '\000';
+        }
 
 #if 0
-	printf("V %08x:%08x P %08x:%08x %s\n",
-	       rva, size, paddr, psize, name.c_str());
+      printf("V %08x:%08x P %08x:%08x %s\n",
+             rva, size, paddr, psize, name.c_str());
 #endif
 
-	le32write_postinc(dataptr, size);
-	le32write_postinc(dataptr, rva);
-	le32write_postinc(dataptr, psize);
-	le32write_postinc(dataptr, paddr);
-	le32write_postinc(dataptr, 0);
-	le32write_postinc(dataptr, 0);
-	le32write_postinc(dataptr, 0);
-        // XXX Figure out the real flags
-	le32write_postinc(dataptr, IMAGE_SCN_CNT_CODE);
-        paddr += psize;
-    }
+      le32write_postinc(dataptr, size);
+      le32write_postinc(dataptr, rva);
+      le32write_postinc(dataptr, psize);
+      le32write_postinc(dataptr, paddr);
+      le32write_postinc(dataptr, 0);
+      le32write_postinc(dataptr, 0);
+      le32write_postinc(dataptr, 0);
+
+      if (name == ".text") {
+        le32write_postinc(dataptr, IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ);
+      } else if (name == ".bss") {
+        le32write_postinc(dataptr, IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
+      } else if (name == ".pdata") {
+        le32write_postinc(dataptr, IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ);
+      } else {
+        le32write_postinc(dataptr, IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
+      }
+  paddr += psize;
+  }
 }
 
 const std::vector<uint8_t> &ElfPeHeader::getData() const { return data; }

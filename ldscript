@@ -10,6 +10,7 @@ SECTIONS
     *(.text)
     *(init)
     *(INIT)
+    *(SORT(.CRT*))
     __text_end__ = .;
     . = ALIGN(4096);
   }
@@ -19,25 +20,33 @@ SECTIONS
     *(.data2)
     *(.rdata)
     *(.sdata)
-    *(.pdata)
     . = ALIGN(4096);
   }
-  .rodata :
+  .pdata :
   {
-    *(.rodata)
-    *(.rodata.*)
-    *(.got2)
-    *(.eh_frame)
-    . = ALIGN(4096);
+     *(.pdata*)
+     *(.rodata*)
+     *(.got2)
+     *(.eh_frame)
+     . = ALIGN(4096);
+  }
+  .tls :
+  {
+     *(SORT(.tls*))
   }
   .idata :
   {
      *(.idata$2)
+     . = ALIGN(16);
      SORT(*)(.idata$3)
+     . = ALIGN(16);
      LONG(0); LONG(0); LONG(0); LONG(0); LONG(0);
      SORT(*)(.idata$4)
+     . = ALIGN(16);
      SORT(*)(.idata$5)
+     . = ALIGN(16);
      SORT(*)(.idata$6)
+     . = ALIGN(16);
      SORT(*)(.idata$7)
      . = ALIGN(4096);
   }

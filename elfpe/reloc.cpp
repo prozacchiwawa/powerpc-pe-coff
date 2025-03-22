@@ -5,43 +5,61 @@
 #include "util.h"
 #include <assert.h>
 
-void AddReloc
-(std::vector<uint8_t> &reloc,
- uint32_t imageBase,
- uint32_t &relocAddrOff,
- uint32_t newReloc, int type)
-{
-    size_t oldsize = reloc.size(), oddsize = oldsize & sizeof(uint16_t);
-    uint8_t *relptr;
-    if (relocAddrOff == (uint32_t)-1)
-    {
-        reloc.resize(sizeof(uint32_t) * 2 + sizeof(uint16_t));
-        relocAddrOff = 0;
-        *GetRelocTarget(reloc, relocAddrOff) = newReloc & ~0xfff;
-        relptr = &reloc[2 * sizeof(uint32_t)];
-    }
-    else if ((newReloc & ~0xfff) != *GetRelocTarget(reloc, relocAddrOff))
-    {
-        reloc.resize(reloc.size() + 2 * sizeof(uint32_t) + sizeof(uint16_t) + oddsize);
-        relptr = &reloc[oldsize + oddsize];
-        uint8_t *oldptr = (uint8_t*)GetRelocTarget(reloc, relocAddrOff);
-        auto oldValue = *((uint32_t *)oldptr);
-        auto newValue = oldValue;
-        printf("type %d relocAddrOff %08x newReloc %08x oldValue %08x newValue %08x\n", type, (unsigned int)relocAddrOff, (unsigned int)oldValue, (unsigned int)newValue);
-        le32write_postinc(oldptr, newValue);
-        le32write_postinc(oldptr, relptr - &reloc[0] - relocAddrOff);
-        relocAddrOff = relptr - &reloc[0];
-        *GetRelocTarget(reloc, relocAddrOff) = newReloc & ~0xfff;
-        relptr += sizeof(uint32_t);
-        le32write_postinc(relptr, 0);
-    }
-    else
-    {
-        reloc.resize(reloc.size() + sizeof(uint16_t));
-        relptr = &reloc[oldsize];
-    }
+uint16_t SingleRelocation::render() {
+  return this->rendered;
+}
 
-    le16write(relptr, type << 12 | newReloc & 0xfff);
+void RelocationSlice::render(std::vector<uint8_t> &relocSect, uint32_t imageBase) {
+  auto cur_offset = relocSect.size();
+  auto size = 8 + 2 * this->relocations.size();
+  if (size & 2) {
+    size += 2;
+  }
+  relocSect.resize(relocSect.size() + size);
+  auto ptr = &relocSect[cur_offset];
+  le32write_postinc(ptr, this->addr);
+  le32write_postinc(ptr, size);
+  for (auto r = this->relocations.begin(); r != this->relocations.end(); r++) {
+    le16write_postinc(ptr, r->second.render());
+  }
+  if (size & 2) {
+    le16write_postinc(ptr, 0);
+  }
+}
+
+void RelocationSlice::add(const SingleRelocation &r) {
+  auto P = r.relocAddr;
+  this->relocations.insert(std::pair(P & 0xfff, r));
+}
+
+void RelocationSection::render(std::vector<uint8_t> &relocSect, uint32_t imageBase) {
+  for (auto slice = this->slices.begin(); slice != this->slices.end(); slice++) {
+    slice->second.render(relocSect, imageBase);
+  }
+}
+
+void RelocationSection::add(const SingleRelocation &r) {
+  uint32_t P = r.relocAddr;
+  uint32_t PPage = P & ~0xfff;
+  auto found = this->slices.find(PPage);
+  if (found == this->slices.end()) {
+    this->slices.insert(std::pair(PPage, RelocationSlice(PPage)));
+    found = this->slices.find(PPage);
+  }
+  found->second.add(r);
+}
+
+void AddReloc
+(RelocationSection &relocs,
+ Elf32_Rela &reloc,
+ Elf32_Sym &symbol,
+ uint32_t targetSection,
+ uint32_t relocTarget,
+ int type)
+{
+    relocs.add
+      (SingleRelocation
+       (reloc, symbol, targetSection, relocTarget, (relocTarget & 0xfff) | (type << 12)));
 }
 
 #define ADDR24_MASK 0xfc000003
@@ -52,9 +70,8 @@ void SingleReloc
  Elf32_Rela &reloc,
  Elf32_Sym &symbol,
  const ElfObjectFile::Section &target,
- std::vector<uint8_t> &relocSect,
- uint32_t imageBase,
- uint32_t &relocAddr)
+ RelocationSection &relocs,
+ uint32_t imageBase)
 {
     int j;
     uint32_t S,A,P;
@@ -97,7 +114,7 @@ void SingleReloc
     case R_PPC_ADDR32:
         printf("ADDR32 S %08x A %08x P %08x\n", S, A, P);
         le32write(Target, S + A);
-        AddReloc(relocSect, imageBase, relocAddr, P - imageBase, 3);
+        AddReloc(relocs, reloc, symbol, target.getNumber(), P - imageBase, 3);
         break;
     case R_PPC_REL32:
         //printf("REL32 S %08x A %08x P %08x\n", S, A, P);
@@ -115,12 +132,12 @@ void SingleReloc
     case R_PPC_ADDR16_LO:
         //printf("ADDR16_LO S %08x A %08x P %08x\n", S, A, P);
         le16write(Target, S + A);
-        AddReloc(relocSect, imageBase, relocAddr, P - imageBase, 2);
+        AddReloc(relocs, reloc, symbol, target.getNumber(), P - imageBase, 2);
         break;
     case R_PPC_ADDR16_HA:
         //printf("ADDR16_HA S %08x A %08x P %08x\n", S, A, P);
         le16write(Target, (S + A + 0x8000) >> 16);
-        AddReloc(relocSect, imageBase, relocAddr, P - imageBase, 4);
+        AddReloc(relocs, reloc, symbol, target.getNumber(), P - imageBase, 4);
         // AddReloc(relocSect, imageBase, relocAddr, S + A, -1);
         break;
     default:
@@ -145,9 +162,8 @@ void SingleRelocSection
 (const ElfObjectFile &obf,
  const ElfObjectFile::Section &section,
  const std::vector<section_mapping_t> &rvas,
- std::vector<uint8_t> &relocData,
- uint32_t imageBase,
- uint32_t &relocAddr)
+ RelocationSection &relocs,
+ uint32_t imageBase)
 {
     Elf32_Rela reloc = { };
     uint8_t *Target;
@@ -191,8 +207,7 @@ void SingleRelocSection
              reloc,
              symbol,
              targetSection,
-             relocData,
-             imageBase,
-             relocAddr);
+             relocs,
+             imageBase);
     }
 }

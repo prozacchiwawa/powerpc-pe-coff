@@ -72,8 +72,8 @@ ProcessRelocSections
  std::vector<DelayedReloc> &needed_relocs,
  const std::vector<section_mapping_t> &rvas)
 {
+    RelocationSection relocs;
     std::vector<uint8_t> relocData;
-    uint32_t relocAddr = (uint32_t)-1;
     int i, j;
     for (i = 1; i < eof.getNumSections(); i++)
     {
@@ -89,17 +89,19 @@ ProcessRelocSections
                 // Relocations for this section were synthesized.
                 auto reloc = r->reloc;
                 SingleReloc
-                    (eof, rvas, reloc, r->symbol, section, relocData, imageBase, relocAddr);
+                  (eof, rvas, reloc, r->symbol, section, relocs, imageBase);
             }
             fprintf(stderr, "Synthetic relocs for %s end\n", section.getName().c_str());
             section.setDirty();
         } else {
             if (section.getType() == SHT_REL ||
-                section.getType() == SHT_RELA)
-                SingleRelocSection(eof, section, rvas, relocData, imageBase, relocAddr);
+                section.getType() == SHT_RELA) {
+                SingleRelocSection(eof, section, rvas, relocs, imageBase);
+            }
         }
     }
-    AddReloc(relocData, 0, relocAddr, 0, 0);
+
+    relocs.render(relocData, imageBase);
     return relocData;
 }
 
@@ -229,10 +231,10 @@ int main( int argc, char **argv ) {
              strtoul(section_align.c_str(), 0, 0),
              strtoul(file_align.c_str(), 0, 0),
              entry_sym,
-             0x10000,
              0x100000,
-             0x10000,
+             0x1000,
              0x100000,
+             0x1000,
              subsystem == "windows" ? 2 : (subsystem == "cui" ? 3 : atoi(subsystem.c_str())),
              is_dll,
              &eof);
@@ -253,18 +255,18 @@ int main( int argc, char **argv ) {
         eof.addSection(".reloc", relocSection, SHT_PROGBITS);
         eof.update();
 
-        // Recompute RVAs after adding reloc section
-        imageSize = header.getSectionRvas(sectionRvas);
-        header.createHeaderSection(sectionRvas, imageSize);
-        eof.addSection(".peheader", header.getData(), SHT_PROGBITS);
-        eof.update();
-
         // Fixup exports
         ExportFixup(eof, sectionRvas);
         eof.update();
 
-        // Fixup imports
+        // Fixup imports (just remember the iat so far)
         ImportFixup(eof, sectionRvas);
+        eof.update();
+
+        // Recompute RVAs after adding reloc section
+        imageSize = header.getSectionRvas(sectionRvas);
+        header.createHeaderSection(sectionRvas, imageSize);
+        eof.addSection(".peheader", header.getData(), SHT_PROGBITS);
         eof.update();
 
         PECoffExecutable cof(eof, output_file + ".tmp", strtoul(file_align.c_str(), 0, 0));
