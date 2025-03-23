@@ -1,0 +1,581 @@
+diff --git a/mingw-w64-crt/crt/CRT_fp10.c b/mingw-w64-crt/crt/CRT_fp10.c
+index 41cb5739..023dc37e 100644
+--- a/mingw-w64-crt/crt/CRT_fp10.c
++++ b/mingw-w64-crt/crt/CRT_fp10.c
+@@ -11,6 +11,9 @@ void _fpreset (void)
+ #if defined(_ARM_) || defined(__arm__)
+   __asm__ __volatile__ (
+     "vmsr	fpscr, %0\n\t" : : "r"(0 /* INITIAL_FPSCR */));
++#elif defined(__powerpc__)
++  __asm__ __volatile__ (
++    "nop\n\t" : : "r"(0));
+ #else
+ #ifdef __GNUC__
+   __asm__ ("fninit");
+diff --git a/mingw-w64-crt/crt/merr.c b/mingw-w64-crt/crt/merr.c
+index f3dff580..d6e1ddcb 100644
+--- a/mingw-w64-crt/crt/merr.c
++++ b/mingw-w64-crt/crt/merr.c
+@@ -69,8 +69,8 @@ _matherr (struct _exception *pexcept)
+ 	break;
+     }
+ 
+-  fprintf (stderr, "_matherr(): %s in %s(%g, %g)  (retval=%g)\n", 
+-	  type, pexcept->name, pexcept->arg1, pexcept->arg2, pexcept->retval);
++//   fprintf (stderr, "_matherr(): %s in %s(%g, %g)  (retval=%g)\n", 
++//	  type, pexcept->name, pexcept->arg1, pexcept->arg2, pexcept->retval);
+   return 0;
+ }
+ 
+diff --git a/mingw-w64-crt/crt/pseudo-reloc.c b/mingw-w64-crt/crt/pseudo-reloc.c
+index 77092080..320f8228 100644
+--- a/mingw-w64-crt/crt/pseudo-reloc.c
++++ b/mingw-w64-crt/crt/pseudo-reloc.c
+@@ -149,8 +149,8 @@ __report_error (const char *msg, ...)
+   fprintf (stderr, "Mingw-w64 runtime failure:\n");
+   vfprintf (stderr, msg, argp);
+ # else
+-  fprintf (stderr, "Mingw runtime failure:\n");
+-  vfprintf (stderr, msg, argp);
++  // fprintf (stderr, "Mingw runtime failure:\n");
++  // vfprintf (stderr, msg, argp);
+ #endif
+   va_end (argp);
+   abort ();
+diff --git a/mingw-w64-crt/include/internal.h b/mingw-w64-crt/include/internal.h
+index e2f2d596..1c1958f9 100644
+--- a/mingw-w64-crt/include/internal.h
++++ b/mingw-w64-crt/include/internal.h
+@@ -166,7 +166,10 @@ extern char ** __MINGW_IMP_SYMBOL(_wcmdln);
+ 
+   _CRTIMP void __cdecl __set_app_type (int);
+ 
++#ifndef _NTSTATUS_PSDK
++#define _NTSTATUS_PSDK
+   typedef LONG NTSTATUS;
++#endif
+ 
+ #include <crtdbg.h>
+ #include <errno.h>
+diff --git a/mingw-w64-headers/crt/_mingw.h.in b/mingw-w64-headers/crt/_mingw.h.in
+index 2742b115..0d82b757 100644
+--- a/mingw-w64-headers/crt/_mingw.h.in
++++ b/mingw-w64-headers/crt/_mingw.h.in
+@@ -4,6 +4,8 @@
+  * No warranty is given; refer to the file DISCLAIMER.PD within this package.
+  */
+ 
++#ifndef linux
++
+ #ifndef _INC__MINGW_H
+ #define _INC__MINGW_H
+ 
+@@ -567,3 +569,9 @@ const char *__mingw_get_crt_info (void);
+ #endif
+ 
+ #endif /* MINGW_SDK_INIT */
++
++#else /* linux */
++
++#include "linhack.h"
++
++#endif /* linux */
+diff --git a/mingw-w64-headers/crt/_mingw_stdarg.h b/mingw-w64-headers/crt/_mingw_stdarg.h
+index ab9533d5..161d640f 100644
+--- a/mingw-w64-headers/crt/_mingw_stdarg.h
++++ b/mingw-w64-headers/crt/_mingw_stdarg.h
+@@ -7,11 +7,13 @@
+ #ifndef _INC_STDARG
+ #define _INC_STDARG
+ 
+-#ifndef _WIN32
++#if !defined(_WIN32) && !defined(linux)
+ #error Only Win32 target is supported!
+ #endif
+ 
++#ifndef __powerpc__
+ #include <vadefs.h>
++#endif
+ 
+ #ifndef va_start
+ #define va_start _crt_va_start
+diff --git a/mingw-w64-headers/crt/ctype.h b/mingw-w64-headers/crt/ctype.h
+index e0ff343b..23fbf690 100644
+--- a/mingw-w64-headers/crt/ctype.h
++++ b/mingw-w64-headers/crt/ctype.h
+@@ -6,6 +6,7 @@
+ #ifndef _INC_CTYPE
+ #define _INC_CTYPE
+ 
++#include <_mingw.h>
+ #include <crtdefs.h>
+ 
+ #ifdef __cplusplus
+diff --git a/mingw-w64-headers/crt/excpt.h b/mingw-w64-headers/crt/excpt.h
+index 7ceaaf16..936adc46 100644
+--- a/mingw-w64-headers/crt/excpt.h
++++ b/mingw-w64-headers/crt/excpt.h
+@@ -42,6 +42,12 @@ extern "C" {
+ 
+   struct _EXCEPTION_RECORD;
+   struct _CONTEXT;
++
++#elif defined(__powerpc__)
++
++  struct _EXCEPTION_RECORD;
++  struct _CONTEXT;
++
+ #endif
+ 
+ #define GetExceptionCode _exception_code
+diff --git a/mingw-w64-headers/crt/linhack.h b/mingw-w64-headers/crt/linhack.h
+new file mode 100644
+index 00000000..c76d6e95
+--- /dev/null
++++ b/mingw-w64-headers/crt/linhack.h
+@@ -0,0 +1,19 @@
++#ifndef MINGW_SDK_HOST
++#define MINGW_SDK_HOST
++
++#define __MINGW_EXTENSION
++#define __attribute__(x)
++#define __MINGW_ATTRIB_NONNULL(x)
++#define __MINGW_NOTHROW
++#define __mingw_ovr
++#define _CRTIMP
++#define __cdecl
++#define __MINGW_ATTRIB_DEPRECATED_MSVC2005
++#define __MINGW_ATTRIB_DEPRECATED_SEC_WARN
++#define __MINGW_IMP_SYMBOL
++
++typedef long long __int64;
++typedef unsigned int uintptr_t;
++typedef int errno_t;
++
++#endif /* MINGW_SDK_HOST */
+diff --git a/mingw-w64-headers/crt/malloc.h b/mingw-w64-headers/crt/malloc.h
+index b4c9dc48..7df5a73c 100644
+--- a/mingw-w64-headers/crt/malloc.h
++++ b/mingw-w64-headers/crt/malloc.h
+@@ -134,7 +134,7 @@ void * __mingw_aligned_realloc (void *_Memory, size_t _Size, size_t _Offset);
+ #define _ALLOCA_S_STACK_MARKER 0xCCCC
+ #define _ALLOCA_S_HEAP_MARKER 0xDDDD
+ 
+-#if defined(_ARM_) || (defined(_X86_) && !defined(__x86_64))
++#if defined(_ARM_) || (defined(_X86_) && !defined(__x86_64)) || defined(__powerpc__)
+ #define _ALLOCA_S_MARKER_SIZE 8
+ #elif defined(__ia64__) || defined(__x86_64)
+ #define _ALLOCA_S_MARKER_SIZE 16
+diff --git a/mingw-w64-headers/crt/setjmp.h b/mingw-w64-headers/crt/setjmp.h
+index 5be566da..42ae29f7 100644
+--- a/mingw-w64-headers/crt/setjmp.h
++++ b/mingw-w64-headers/crt/setjmp.h
+@@ -141,7 +141,7 @@ extern "C" {
+     SETJMP_FLOAT128 Xmm15;
+   } _JUMP_BUFFER;
+ 
+-#elif defined(_ARM_)
++#elif defined(_ARM_) || defined(__powerpc__)
+ 
+ #define _JBLEN 28
+ #define _JBTYPE int
+diff --git a/mingw-w64-headers/crt/stdarg.h b/mingw-w64-headers/crt/stdarg.h
+index 2ff5000a..d0318c37 100644
+--- a/mingw-w64-headers/crt/stdarg.h
++++ b/mingw-w64-headers/crt/stdarg.h
+@@ -84,7 +84,10 @@ typedef __builtin_va_list __gnuc_va_list;
+ #define _VA_LIST va_list
+ #endif
+ #endif /* __i860__ */
++#ifndef _VA_LIST_DEFINED
++#define _VA_LIST_DEFINED
+ typedef __gnuc_va_list va_list;
++#endif
+ #ifdef _SCO_DS
+ #define __VA_LIST
+ #endif
+diff --git a/mingw-w64-headers/crt/stddef.h b/mingw-w64-headers/crt/stddef.h
+index 97f5c6c9..be64cbcd 100644
+--- a/mingw-w64-headers/crt/stddef.h
++++ b/mingw-w64-headers/crt/stddef.h
+@@ -4,6 +4,12 @@
+  * No warranty is given; refer to the file DISCLAIMER.PD within this package.
+  */
+ 
++#ifdef linux
++
++#include "linhack.h"
++
++#endif
++
+ #include <crtdefs.h>
+ 
+ #ifndef _INC_STDDEF
+diff --git a/mingw-w64-headers/crt/stdio.h b/mingw-w64-headers/crt/stdio.h
+index c37ae15f..c47b2904 100644
+--- a/mingw-w64-headers/crt/stdio.h
++++ b/mingw-w64-headers/crt/stdio.h
+@@ -7,6 +7,7 @@
+ #define _INC_STDIO
+ 
+ #include <crtdefs.h>
++#include <stdarg.h>
+ 
+ #include <_mingw_print_push.h>
+ 
+@@ -413,12 +414,19 @@ int vsnprintf (char *__stream, size_t __n, const char *__format, __builtin_va_li
+ #pragma GCC diagnostic ignored "-Wshadow"
+ #endif
+ 
++#ifdef linux
++#define LINHACK_ZERO { return 0; }
++#else
++#define LINHACK_ZERO
++#endif
++
++
+   __attribute__((__format__ (ms_scanf, 1, 0))) __MINGW_ATTRIB_NONNULL(1)
+-  int __cdecl __ms_vscanf(const char * __restrict__ Format, va_list argp);
++  int __cdecl __ms_vscanf(const char * __restrict__ Format, va_list argp) LINHACK_ZERO;
+   __attribute__((__format__ (ms_scanf, 2, 0))) __MINGW_ATTRIB_NONNULL(2)
+-  int __cdecl __ms_vfscanf (FILE * __restrict__ fp, const char * __restrict__ Format,va_list argp);
++  int __cdecl __ms_vfscanf (FILE * __restrict__ fp, const char * __restrict__ Format,va_list argp) LINHACK_ZERO;
+   __attribute__((__format__ (ms_scanf, 2, 0))) __MINGW_ATTRIB_NONNULL(2)
+-  int __cdecl __ms_vsscanf (const char * __restrict__ _Str,const char * __restrict__ Format,va_list argp);
++  int __cdecl __ms_vsscanf (const char * __restrict__ _Str,const char * __restrict__ Format,va_list argp) LINHACK_ZERO;
+ 
+   __mingw_ovr
+   __attribute__((__format__ (ms_scanf, 2, 0))) __MINGW_ATTRIB_NONNULL(2)
+@@ -575,7 +583,7 @@ int vsnprintf (char *__stream, size_t __n, const char *__format, __builtin_va_li
+ # undef vsnprintf
+   __attribute__((__format__ (ms_printf, 3, 0))) __MINGW_ATTRIB_NONNULL(3)
+   int __cdecl __ms_vsnprintf(char * __restrict__ d,size_t n,const char * __restrict__ format,va_list arg)
+-    __MINGW_ATTRIB_DEPRECATED_MSVC2005 __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
++    __MINGW_ATTRIB_DEPRECATED_MSVC2005 __MINGW_ATTRIB_DEPRECATED_SEC_WARN LINHACK_ZERO;
+ 
+   __mingw_ovr
+   __attribute__((__format__ (ms_printf, 3, 0))) __MINGW_ATTRIB_NONNULL(3)
+@@ -585,7 +593,7 @@ int vsnprintf (char *__stream, size_t __n, const char *__format, __builtin_va_li
+   }
+ 
+   __attribute__((__format__ (ms_printf, 3, 4))) __MINGW_ATTRIB_NONNULL(3)
+-  int __cdecl __ms_snprintf(char * __restrict__ s, size_t n, const char * __restrict__  format, ...);
++  int __cdecl __ms_snprintf(char * __restrict__ s, size_t n, const char * __restrict__  format, ...) LINHACK_ZERO;
+ 
+ #ifndef __NO_ISOCEXT
+ __mingw_ovr
+@@ -769,9 +777,9 @@ int vsnwprintf (wchar_t *__stream, size_t __n, const wchar_t *__format, __builti
+   int __cdecl swscanf(const wchar_t * __restrict__ _Src,const wchar_t * __restrict__ _Format,...) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+   int __cdecl wscanf(const wchar_t * __restrict__ _Format,...) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+ #ifndef __NO_ISOCEXT  /* externs in libmingwex.a */
+-  int __cdecl __ms_vwscanf (const wchar_t * __restrict__ , va_list);
+-  int __cdecl __ms_vfwscanf (FILE * __restrict__ ,const wchar_t * __restrict__ ,va_list);
+-  int __cdecl __ms_vswscanf (const wchar_t * __restrict__ ,const wchar_t * __restrict__ ,va_list);
++  int __cdecl __ms_vwscanf (const wchar_t * __restrict__ , va_list) LINHACK_ZERO;
++  int __cdecl __ms_vfwscanf (FILE * __restrict__ ,const wchar_t * __restrict__ ,va_list) LINHACK_ZERO;
++  int __cdecl __ms_vswscanf (const wchar_t * __restrict__ ,const wchar_t * __restrict__ ,va_list) LINHACK_ZERO;
+ 
+   __mingw_ovr
+   __MINGW_ATTRIB_NONNULL(2)
+@@ -829,7 +837,7 @@ int vsnwprintf (wchar_t *__stream, size_t __n, const wchar_t *__format, __builti
+   _CRTIMP int __cdecl _swprintf_c(wchar_t * __restrict__ _DstBuf,size_t _SizeInWords,const wchar_t * __restrict__ _Format,...);
+   _CRTIMP int __cdecl _vswprintf_c(wchar_t * __restrict__ _DstBuf,size_t _SizeInWords,const wchar_t * __restrict__ _Format,va_list _ArgList);
+   _CRTIMP int __cdecl _snwprintf(wchar_t * __restrict__ _Dest,size_t _Count,const wchar_t * __restrict__ _Format,...) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+-  _CRTIMP int __cdecl _vsnwprintf(wchar_t * __restrict__ _Dest,size_t _Count,const wchar_t * __restrict__ _Format,va_list _Args) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
++  _CRTIMP int __cdecl _vsnwprintf(wchar_t * __restrict__ _Dest,size_t _Count,const wchar_t * __restrict__ _Format,va_list _Args) __MINGW_ATTRIB_DEPRECATED_SEC_WARN LINHACK_ZERO;
+ 
+ #ifndef __NO_ISOCEXT  /* externs in libmingwex.a */
+ 
+@@ -838,8 +846,8 @@ int vsnwprintf (wchar_t *__stream, size_t __n, const wchar_t *__format, __builti
+ #pragma push_macro("vsnwprintf")
+ # undef snwprintf
+ # undef vsnwprintf
+-  int __cdecl __ms_snwprintf (wchar_t * __restrict__ s, size_t n, const wchar_t * __restrict__ format, ...);
+-  int __cdecl __ms_vsnwprintf (wchar_t * __restrict__ , size_t, const wchar_t * __restrict__ , va_list);
++  int __cdecl __ms_snwprintf (wchar_t * __restrict__ s, size_t n, const wchar_t * __restrict__ format, ...) LINHACK_ZERO;
++  int __cdecl __ms_vsnwprintf (wchar_t * __restrict__ , size_t, const wchar_t * __restrict__ , va_list) LINHACK_ZERO;
+   __mingw_ovr
+   int snwprintf (wchar_t * __restrict__ s, size_t n, const wchar_t * __restrict__ format, ...)
+   {
+diff --git a/mingw-w64-headers/crt/stdlib.h b/mingw-w64-headers/crt/stdlib.h
+index 765eca92..d8349608 100644
+--- a/mingw-w64-headers/crt/stdlib.h
++++ b/mingw-w64-headers/crt/stdlib.h
+@@ -568,7 +568,7 @@ unsigned long __cdecl _lrotr(unsigned long,int);
+        ((__MINGW_GCC_VERSION >= 40902) || defined(__LP64__))) */
+ 
+   _CRTIMP void __cdecl _makepath(char *_Path,const char *_Drive,const char *_Dir,const char *_Filename,const char *_Ext);
+-  _onexit_t __cdecl _onexit(_onexit_t _Func);
++  extern _onexit_t (__cdecl * __MINGW_IMP_SYMBOL(_onexit)) (_onexit_t func);
+ 
+ #ifndef _CRT_PERROR_DEFINED
+ #define _CRT_PERROR_DEFINED
+diff --git a/mingw-w64-headers/include/combaseapi.h b/mingw-w64-headers/include/combaseapi.h
+index ca6483f9..21951c81 100644
+--- a/mingw-w64-headers/include/combaseapi.h
++++ b/mingw-w64-headers/include/combaseapi.h
+@@ -143,8 +143,14 @@ typedef enum tagREGCLS {
+   REGCLS_SURROGATE = 8
+ } REGCLS;
+ 
++#ifndef __IRpcStubBuffer_FWD_DEFINED__
++#define __IRpcStubBuffer_FWD_DEFINED__
+ typedef interface IRpcStubBuffer IRpcStubBuffer;
++#endif
++#ifndef __IRpcChannelBuffer_FWD_DEFINED__
++#define __IRpcChannelBuffer_FWD_DEFINED__
+ typedef interface IRpcChannelBuffer IRpcChannelBuffer;
++#endif
+ 
+ typedef enum tagCOINITBASE {
+   COINITBASE_MULTITHREADED = 0x0,
+@@ -303,7 +309,10 @@ WINOLEAPI CLSIDFromProgID (LPCOLESTR lpszProgID, LPCLSID lpclsid);
+ WINOLEAPI_(int) StringFromGUID2 (REFGUID rguid, LPOLESTR lpsz, int cchMax);
+ WINOLEAPI CoCreateGuid (GUID *pguid);
+ 
++#ifndef _PROPVARIANT_DEFINED
++#define _PROPVARIANT_DEFINED
+ typedef struct tagPROPVARIANT PROPVARIANT;
++#endif
+ 
+ WINOLEAPI PropVariantCopy (PROPVARIANT *pvarDest, const PROPVARIANT *pvarSrc);
+ WINOLEAPI PropVariantClear (PROPVARIANT *pvar);
+diff --git a/mingw-w64-headers/include/interlockedapi.h b/mingw-w64-headers/include/interlockedapi.h
+index 49f5cd79..8ce78a47 100755
+--- a/mingw-w64-headers/include/interlockedapi.h
++++ b/mingw-w64-headers/include/interlockedapi.h
+@@ -14,7 +14,7 @@ extern "C" {
+ #endif
+ 
+ #if !defined (NOWINBASEINTERLOCK) && !defined (_NTOS_)
+-#if !defined (__x86_64__) && !defined (__ia64__) && !defined (__arm__)
++#if !defined (__x86_64__) && !defined (__ia64__) && !defined (__arm__) && !defined(__powerpc__)
+   WINBASEAPI LONG WINAPI InterlockedIncrement (LONG volatile *lpAddend);
+   WINBASEAPI LONG WINAPI InterlockedDecrement (LONG volatile *lpAddend);
+   WINBASEAPI LONG WINAPI InterlockedExchange (LONG volatile *Target, LONG Value);
+@@ -25,7 +25,7 @@ extern "C" {
+ #define InterlockedExchangePointer(Target, Value) (PVOID)InterlockedExchange ((PLONG) (Target),((LONG) (LONG_PTR) (Value)))
+ #define InterlockedExchangePointerNoFence InterlockedExchangePointer
+ 
+-#if defined(__MINGW_INTRIN_INLINE) && (defined(__GNUC__) && (__MINGW_GNUC_PREREQ(4, 9) || (__MINGW_GNUC_PREREQ(4, 8) && __GNUC_PATCHLEVEL__ >= 2)))
++#ifdef __powerpc__ // #if defined(__MINGW_INTRIN_INLINE) && (defined(__GNUC__) && (__MINGW_GNUC_PREREQ(4, 9) || (__MINGW_GNUC_PREREQ(4, 8) && __GNUC_PATCHLEVEL__ >= 2)))
+   __MINGW_INTRIN_INLINE LONG WINAPI InterlockedIncrement(LONG volatile *lpAddend) {
+     return _InterlockedIncrement(lpAddend);
+   }
+diff --git a/mingw-w64-headers/include/minwindef.h b/mingw-w64-headers/include/minwindef.h
+index bf0db9ba..a737da20 100755
+--- a/mingw-w64-headers/include/minwindef.h
++++ b/mingw-w64-headers/include/minwindef.h
+@@ -155,7 +155,10 @@ typedef BOOL *LPBOOL;
+ #define _LPCVOID_DEFINED
+   typedef CONST void *LPCVOID;
+ #endif
++#ifndef __INT_DEFINED
++#define __INT_DEFINED
+   typedef int INT;
++#endif
+   typedef unsigned int UINT;
+   typedef unsigned int *PUINT;
+ 
+diff --git a/mingw-w64-headers/include/oaidl.h b/mingw-w64-headers/include/oaidl.h
+index 5ecfe514..aa5c63dc 100644
+--- a/mingw-w64-headers/include/oaidl.h
++++ b/mingw-w64-headers/include/oaidl.h
+@@ -522,8 +522,12 @@ struct _wireVARIANT {
+ };
+ 
+ 
++#ifndef DEFINED_DISPID_MEMBERID
++#define DEFINED_DISPID_MEMBERID
+ typedef LONG DISPID;
+ typedef DISPID MEMBERID;
++#endif
++
+ typedef DWORD HREFTYPE;
+ typedef enum tagTYPEKIND {
+     TKIND_ENUM = 0,
+@@ -822,7 +826,10 @@ typedef struct tagCUSTDATA *LPCUSTDATA;
+ #ifndef __ICreateTypeInfo_INTERFACE_DEFINED__
+ #define __ICreateTypeInfo_INTERFACE_DEFINED__
+ 
++#ifndef DEFINE_LPCREATETYPEINFO
++#define DEFINE_LPCREATETYPEINFO
+ typedef ICreateTypeInfo *LPCREATETYPEINFO;
++#endif
+ 
+ DEFINE_GUID(IID_ICreateTypeInfo, 0x00020405, 0x0000, 0x0000, 0xc0,0x00, 0x00,0x00,0x00,0x00,0x00,0x46);
+ #if defined(__cplusplus) && !defined(CINTERFACE)
+@@ -1965,7 +1972,10 @@ void __RPC_STUB ICreateTypeInfo2_SetName_Stub(
+ #ifndef __ICreateTypeLib_INTERFACE_DEFINED__
+ #define __ICreateTypeLib_INTERFACE_DEFINED__
+ 
++#ifndef DEFINED_LPCREATETYPELIB
++#define DEFINED_LPCREATETYPELIB
+ typedef ICreateTypeLib *LPCREATETYPELIB;
++#endif
+ 
+ DEFINE_GUID(IID_ICreateTypeLib, 0x00020406, 0x0000, 0x0000, 0xc0,0x00, 0x00,0x00,0x00,0x00,0x00,0x46);
+ #if defined(__cplusplus) && !defined(CINTERFACE)
+@@ -2463,8 +2473,10 @@ void __RPC_STUB ICreateTypeLib2_SetHelpStringDll_Stub(
+ #ifndef __IDispatch_INTERFACE_DEFINED__
+ #define __IDispatch_INTERFACE_DEFINED__
+ 
++#ifndef DEFINED_LPDISPATCH
++#define DEFINED_LPDISPATCH
+ typedef IDispatch *LPDISPATCH;
+-
++#endif
+ 
+ #define DISPID_UNKNOWN (-1)
+ 
+@@ -2848,7 +2860,10 @@ HRESULT __RPC_STUB IEnumVARIANT_Next_Stub(
+ #ifndef __ITypeComp_INTERFACE_DEFINED__
+ #define __ITypeComp_INTERFACE_DEFINED__
+ 
++#ifndef DEFINED_LPTYPECOMP
++#define DEFINED_LPTYPECOMP
+ typedef ITypeComp *LPTYPECOMP;
++#endif
+ 
+ typedef enum tagDESCKIND {
+     DESCKIND_NONE = 0,
+@@ -3028,7 +3043,10 @@ HRESULT __RPC_STUB ITypeComp_BindType_Stub(
+ #ifndef __ITypeInfo_INTERFACE_DEFINED__
+ #define __ITypeInfo_INTERFACE_DEFINED__
+ 
++#ifndef DEFINDE_LPTYPEINFO
++#define DEFINDE_LPTYPEINFO
+ typedef ITypeInfo *LPTYPEINFO;
++#endif
+ 
+ DEFINE_GUID(IID_ITypeInfo, 0x00020401, 0x0000, 0x0000, 0xc0,0x00, 0x00,0x00,0x00,0x00,0x00,0x46);
+ #if defined(__cplusplus) && !defined(CINTERFACE)
+@@ -4295,7 +4313,10 @@ typedef enum tagLIBFLAGS {
+     LIBFLAG_FHASDISKIMAGE = 0x8
+ } LIBFLAGS;
+ 
++#ifndef DEFINED_LPTYPELIB
++#define DEFINED_LPTYPELIB
+ typedef ITypeLib *LPTYPELIB;
++#endif
+ 
+ typedef struct tagTLIBATTR {
+     GUID guid;
+diff --git a/mingw-w64-headers/include/oleauto.h b/mingw-w64-headers/include/oleauto.h
+index 152af5fd..319112d4 100644
+--- a/mingw-w64-headers/include/oleauto.h
++++ b/mingw-w64-headers/include/oleauto.h
+@@ -545,8 +545,11 @@ WINOLEAUTAPI VarTokenizeFormatString(LPOLESTR pstrFormat,LPBYTE rgbTok,int cbTok
+ 
+ #ifndef DEFINED_LPTYPELIB
+ #define DEFINED_LPTYPELIB
++#ifndef __ITypeLib_INTERFACE_DEFINED__
++#define __ITypeLib_INTERFACE_DEFINED__
+ typedef ITypeLib *LPTYPELIB;
+ #endif
++#endif
+ #ifndef DEFINED_DISPID_MEMBERID
+ #define DEFINED_DISPID_MEMBERID
+ typedef LONG DISPID;
+diff --git a/mingw-w64-headers/include/propidl.h b/mingw-w64-headers/include/propidl.h
+index a8e551ca..99b29af9 100644
+--- a/mingw-w64-headers/include/propidl.h
++++ b/mingw-w64-headers/include/propidl.h
+@@ -95,8 +95,11 @@ typedef struct tagVersionedStream *LPVERSIONEDSTREAM;
+ #if 0
+ typedef struct tag_inner_PROPVARIANT PROPVARIANT;
+ #else
++#ifndef _PROPVARIANT_DEFINED
++#define _PROPVARIANT_DEFINED
+ typedef struct tagPROPVARIANT PROPVARIANT;
+ #endif
++#endif
+ 
+ typedef struct tagCAC {
+     ULONG cElems;
+diff --git a/mingw-w64-headers/include/rpc.h b/mingw-w64-headers/include/rpc.h
+index c78cc339..9186c1d6 100644
+--- a/mingw-w64-headers/include/rpc.h
++++ b/mingw-w64-headers/include/rpc.h
+@@ -50,7 +50,7 @@ extern "C" {
+ 
+ #define RPC_UNICODE_SUPPORTED
+ #define __RPC_FAR
+-#if defined(_ARM_)
++#if defined(_ARM_) || defined(__powerpc__)
+ #define __RPC_API
+ #else
+ #define __RPC_API __stdcall
+diff --git a/mingw-w64-headers/include/winnt.h b/mingw-w64-headers/include/winnt.h
+index a855801b..e5214c35 100644
+--- a/mingw-w64-headers/include/winnt.h
++++ b/mingw-w64-headers/include/winnt.h
+@@ -126,6 +126,8 @@ extern "C" {
+ #define PROBE_ALIGNMENT(_s) TYPE_ALIGNMENT (DWORD)
+ #elif defined (__ia64__) || defined (__arm__)
+ #define PROBE_ALIGNMENT(_s) (TYPE_ALIGNMENT (_s) > TYPE_ALIGNMENT (DWORD) ? TYPE_ALIGNMENT (_s) : TYPE_ALIGNMENT (DWORD))
++#elif defined (__powerpc__)
++#define PROBE_ALIGNMENT(_s) TYPE_ALIGNMENT (DWORD)
+ #elif !defined (RC_INVOKED) && !defined (__WIDL__)
+ #error No supported target architecture.
+ #endif
+@@ -279,9 +281,12 @@ extern "C" {
+   typedef short SHORT;
+   typedef __LONG32 LONG;
+ #if !defined (__WIDL__)
++#ifndef __INT_DEFINED
++#define __INT_DEFINED
+   typedef int INT;
+ #endif
+ #endif
++#endif
+ 
+ #ifndef __WCHAR_DEFINED
+ #define __WCHAR_DEFINED
+@@ -1752,6 +1757,16 @@ extern "C" {
+ 
+ #endif /* end of _AMD64_ */
+ 
++#ifdef __powerpc__
++
++  typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
++    DWORD Gpr[32];
++    DWORD Msr;
++    DWORD Ctr;
++    DWORD Cr;
++  } CONTEXT, *PCONTEXT;
++
++#endif
+ 
+ #ifdef _ARM_
+ 
+diff --git a/mingw-w64-headers/include/wtypesbase.h b/mingw-w64-headers/include/wtypesbase.h
+index 2616f8a5..b9fe74db 100644
+--- a/mingw-w64-headers/include/wtypesbase.h
++++ b/mingw-w64-headers/include/wtypesbase.h
+@@ -86,10 +86,13 @@ typedef float FLOAT;
+ #endif
+ #endif
+ 
++#ifndef BASETYPES
++#define BASETYPES
+ typedef unsigned char UCHAR;
+ typedef short SHORT;
+ typedef unsigned short USHORT;
+ typedef DWORD ULONG;
++#endif
+ typedef double DOUBLE;
+ #ifndef _DWORDLONG_
+ typedef UINT64 DWORDLONG;
+@@ -373,7 +376,11 @@ typedef struct _HYPER_SIZEDARR {
+ #endif  /* __IWinTypesBase_INTERFACE_DEFINED__ */
+ 
+ 
++#ifndef BASETYPES
++#define BASETYPES
+ typedef boolean BOOLEAN;
++#endif
++
+ #ifndef _tagBLOB_DEFINED
+ #define _tagBLOB_DEFINED
+ #define _BLOB_DEFINED

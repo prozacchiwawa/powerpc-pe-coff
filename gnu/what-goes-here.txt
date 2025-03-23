@@ -1,1 +1,2 @@
 Unpack and patch gcc-4.1.0 and binutils-2.16.1 here.
+Clone and patch https://github.com/Alexpux/mingw-w64 at d0d7f784833bbb0b2d279310ddc6afb52fe47a46 here.

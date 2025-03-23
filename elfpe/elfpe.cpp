@@ -169,15 +169,28 @@ int main( int argc, char **argv ) {
         gcc_args_str.push_back("-lkernel32");
     }
 
+    const char *system_include_dir_list[] = {
+        "lib/mingw-w64-headers/include",
+        "lib/mingw-w64-headers/crt",
+        "lib/mingw-w64-headers",
+        "include",
+        nullptr
+    };
+    for (auto i = 0; system_include_dir_list[i]; i++) {
+        std::ostringstream oss;
+        oss << installdir << "/" << system_include_dir_list[i];
+        gcc_args_str.insert(gcc_args_str.begin(), oss.str().c_str());
+        gcc_args_str.insert(gcc_args_str.begin(), "-isystem");
+    }
+
     // We never use the system start files or standard libs
     gcc_args_str.insert(gcc_args_str.begin(),"-nostdlib");
     gcc_args_str.insert(gcc_args_str.begin(),"-nostartfiles");
-    gcc_args_str.insert(gcc_args_str.begin(),"include/crt");
-    gcc_args_str.insert(gcc_args_str.begin(),"-isystem");
     gcc_args_str.insert(gcc_args_str.begin(),"-mlittle-endian");
     // Add necessary definitions but allow overrides
     possibly_define(gcc_args_str,"_M_PPC");
     possibly_define(gcc_args_str,"_PPC_");
+    possibly_define(gcc_args_str,"__powerpc__");
     possibly_define(gcc_args_str,"__PowerPC__");
     possibly_define(gcc_args_str,"stdcall","");
     possibly_define(gcc_args_str,"__stdcall__","");
