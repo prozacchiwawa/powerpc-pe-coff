@@ -44,4 +44,8 @@ COPY ldscript install.sh /rosbe
 
 RUN (cd gnu/mingw-w64/mingw-w64-headers && ./configure --prefix=/build --target=powerpcle-unknown-elf)
 RUN cp -r gnu/mingw-w64/mingw-w64-headers/* /build/lib/mingw-w64-headers
-RUN (PATH="${PATH}:/build/ovr:/build/bin" && cd gnu/mingw-w64 && CFLAGS="-I/build/lib/mingw-w64-headers/include -I/build/lib/mingw-w64-headers/crt -I/build/mingw-w64-headers" ./configure --prefix=/build --target=powerpcle-unknown-elf)
+RUN (PATH="${PATH}:/build/ovr:/build/bin" && cd gnu/mingw-w64 && CFLAGS="-I/build/lib/mingw-w64-headers/include -I/build/lib/mingw-w64-headers/crt -I/build/mingw-w64-headers" ./configure --prefix=/build --target=powerpcle-unknown-elf --disable-lib64)
+
+RUN mkdir -p /build/lib/mingw-w64-headers/sdks && touch /build/lib/mingw-w64-headers/sdks/_mingw_directx.h /build/lib/mingw-w64-headers/sdks/_mingw_ddk.h
+RUN mkdir -p gnu/mingw-w64/mingw-w64-crt/lib32
+RUN (PATH="${PATH}:/build/ovr:/build/bin" && cd gnu/mingw-w64 && make CC=powerpcle-unknown-elf-gcc AR=powerpcle-unknown-elf-ar RANLIB=powerpcle-unknown-elf-ranlib CFLAGS="-I/build/lib/mingw-w64-headers/direct-x/include/" DLLTOOL=powerpcle-unknown-elf-dlltool CCAS="powerpcle-unknown-elf-gcc -D__powerpc__" DLLTOOLFLAGS32="" LD=powerpcle-unknown-elf-ld AS=powerpcle-unknown-elf-as install)

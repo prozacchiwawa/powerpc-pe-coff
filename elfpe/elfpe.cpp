@@ -193,14 +193,16 @@ int main( int argc, char **argv ) {
     possibly_define(gcc_args_str,"__powerpc__");
     possibly_define(gcc_args_str,"__PowerPC__");
     possibly_define(gcc_args_str,"stdcall","");
+    possibly_define(gcc_args_str,"__stdcall","");
     possibly_define(gcc_args_str,"__stdcall__","");
     possibly_define(gcc_args_str,"cdecl","");
+    possibly_define(gcc_args_str,"__cdecl","");
     possibly_define(gcc_args_str,"__cdecl__","");
     possibly_define(gcc_args_str,"fastcall","");
     possibly_define(gcc_args_str,"__fastcall__","");
-    possibly_define(gcc_args_str,"WORDS_BIGENDIAN");
     possibly_define(gcc_args_str,"__MINGW_IMPORT","extern");
     possibly_define(gcc_args_str,"_CRTIMP","");
+    possibly_define(gcc_args_str,"NTSYSAPI","");
     possibly_define(gcc_args_str,"__NO_CTYPE_INLINES");
     possibly_define(gcc_args_str,"__declspec(x)","");
     /*if (!compile_only) gcc_args_str.push_back(mingw_lib_dir + "/libgcc.a"); */

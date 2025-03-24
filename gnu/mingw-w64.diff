@@ -57,8 +57,2329 @@ index e2f2d596..1c1958f9 100644
  
  #include <crtdbg.h>
  #include <errno.h>
+diff --git a/mingw-w64-crt/intrincs/bittestci.c b/mingw-w64-crt/intrincs/bittestci.c
+index 87c56b95..5306be66 100644
+--- a/mingw-w64-crt/intrincs/bittestci.c
++++ b/mingw-w64-crt/intrincs/bittestci.c
+@@ -3,4 +3,12 @@
+ 
+ #include <intrin.h>
+ 
++#ifdef _PPC_
++unsigned char InterlockedBitTestAndComplement(__LONG32 volatile *value, __LONG32 bitno) {
++  __LONG32 mask = 1 << bitno;
++  return __sync_fetch_and_xor(value, mask);
++}
++
++#else
+ unsigned char InterlockedBitTestAndComplement(__LONG32 volatile *, __LONG32) __attribute__((alias("_interlockedbittestandcomplement")));
++#endif
+diff --git a/mingw-w64-crt/intrincs/bittestri.c b/mingw-w64-crt/intrincs/bittestri.c
+index e8dc3ec8..f1195bb7 100644
+--- a/mingw-w64-crt/intrincs/bittestri.c
++++ b/mingw-w64-crt/intrincs/bittestri.c
+@@ -3,4 +3,23 @@
+ 
+ #include <intrin.h>
+ 
++#ifdef _PPC_
++unsigned char InterlockedBitTestAndReset(__LONG32 volatile *a, __LONG32 b) {
++  long x;
++  long y;
++  long mask = ~(1<<b);
++
++  y = *a;
++
++  do
++    {
++      x = y;
++      y = _InterlockedCompareExchange(a, x & mask, x);
++    }
++  while(y != x);
++
++  return (y & ~mask) != 0;
++}
++#else
+ unsigned char InterlockedBitTestAndReset(__LONG32 volatile *, __LONG32) __attribute__((alias("_interlockedbittestandreset")));
++#endif
+diff --git a/mingw-w64-crt/intrincs/bittestsi.c b/mingw-w64-crt/intrincs/bittestsi.c
+index a4fdc972..58bc73ae 100644
+--- a/mingw-w64-crt/intrincs/bittestsi.c
++++ b/mingw-w64-crt/intrincs/bittestsi.c
+@@ -3,4 +3,23 @@
+ 
+ #include <intrin.h>
+ 
++#ifdef _PPC_
++unsigned char InterlockedBitTestAndSet(__LONG32 volatile *a, __LONG32 b) {
++  long x;
++  long y;
++  long mask = ~(1<<b);
++
++  y = *a;
++
++  do
++    {
++      x = y;
++      y = _InterlockedCompareExchange(a, x | mask, x);
++    }
++  while(y != x);
++
++  return (y & ~mask) != 0;
++}
++#else
+ unsigned char InterlockedBitTestAndSet(__LONG32 volatile *, __LONG32) __attribute__((alias("_interlockedbittestandset")));
++#endif
+diff --git a/mingw-w64-crt/intrincs/ilockand.c b/mingw-w64-crt/intrincs/ilockand.c
+index 81a2f7b3..eae9f0bc 100644
+--- a/mingw-w64-crt/intrincs/ilockand.c
++++ b/mingw-w64-crt/intrincs/ilockand.c
+@@ -3,5 +3,12 @@
+ 
+ #include <intrin.h>
+ 
++#ifdef _PPC_
++__LONG32 _InterlockedAnd(volatile long * const value, const long mask)
++{
++  return __sync_fetch_and_and(value, mask);
++}
++#else
+ __LONG32 InterlockedAnd(__LONG32 volatile *, __LONG32) __attribute__((alias("_InterlockedAnd")));
++#endif
+ 
+diff --git a/mingw-w64-crt/intrincs/ilockor.c b/mingw-w64-crt/intrincs/ilockor.c
+index 1579c505..dca3a074 100644
+--- a/mingw-w64-crt/intrincs/ilockor.c
++++ b/mingw-w64-crt/intrincs/ilockor.c
+@@ -3,5 +3,11 @@
+ 
+ #include <intrin.h>
+ 
++#ifdef _PPC_
++__LONG32 _InterlockedOr(volatile long * const value, const long mask)
++{
++  return __sync_fetch_and_or(value, mask);
++}
++#else
+ __LONG32 InterlockedOr(__LONG32 volatile *, __LONG32) __attribute__((alias("_InterlockedOr")));
+-
++#endif
+diff --git a/mingw-w64-crt/intrincs/ilockxor.c b/mingw-w64-crt/intrincs/ilockxor.c
+index 9d3e0fac..adcaabd8 100644
+--- a/mingw-w64-crt/intrincs/ilockxor.c
++++ b/mingw-w64-crt/intrincs/ilockxor.c
+@@ -3,5 +3,11 @@
+ 
+ #include <intrin.h>
+ 
++#ifdef _PPC_
++__LONG32 _InterlockedXor(volatile long * const value, const long mask)
++{
++  return __sync_fetch_and_xor(value, mask);
++}
++#else
+ __LONG32 InterlockedXor(__LONG32 volatile *, __LONG32) __attribute__((alias("_InterlockedXor")));
+-
++#endif
+diff --git a/mingw-w64-crt/intrincs/rdtsc.c b/mingw-w64-crt/intrincs/rdtsc.c
+index fd9cb75d..a1b2b108 100644
+--- a/mingw-w64-crt/intrincs/rdtsc.c
++++ b/mingw-w64-crt/intrincs/rdtsc.c
+@@ -9,6 +9,18 @@
+ #endif
+ #include <intrin.h>
+ 
++#ifdef _PPC_
++unsigned __int64 __rdtsc(void)
++{
++  unsigned long lo32, hi32, hc32;
++  __asm__("mftbl %0" : "=b" (lo32));
++  do {
++    __asm__("mftbu %0" : "=b" (hi32));
++    __asm__("mftbu %0" : "=b" (hc32));
++  } while (hi32 != hc32);
++  return (((unsigned __int64)hi32) << 32) | lo32;
++}
++#else
+ unsigned __int64 __rdtsc(void)
+ {
+ #ifdef _WIN64
+@@ -21,4 +33,4 @@ unsigned __int64 __rdtsc(void)
+           : "=a" (val1), "=d" (val2));
+       return ((unsigned __int64)val1) | (((unsigned __int64)val2) << 32);
+ }
+-
++#endif
+diff --git a/mingw-w64-crt/intrincs/writefsdword.c b/mingw-w64-crt/intrincs/writefsdword.c
+index 8e5dc6ea..0c8922e3 100644
+--- a/mingw-w64-crt/intrincs/writefsdword.c
++++ b/mingw-w64-crt/intrincs/writefsdword.c
+@@ -1,4 +1,16 @@
++#ifdef _PPC_
++
++void __writefsdword(const unsigned long Offset, const unsigned long Data)
++{
++  char *addr;
++  __asm__("\tadd %0,13,%1\n\tstw %2,0(%0)" : "=r" (addr) : "r" (Offset), "r" (Data));
++}
++
++#else
++
+ #define __INTRINSIC_ONLYSPECIAL
+ #define __INTRINSIC_SPECIAL___writefsdword // Causes code generation in intrin-impl.h
+ 
+ #include <intrin.h>
++
++#endif
+diff --git a/mingw-w64-crt/math/_chgsignl.S b/mingw-w64-crt/math/_chgsignl.S
+index 38764657..57400476 100644
+--- a/mingw-w64-crt/math/_chgsignl.S
++++ b/mingw-w64-crt/math/_chgsignl.S
+@@ -25,6 +25,13 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl _chgsignl
++_chgsignl:
++  lis 0,0x8000
++  xor 3,0,3
++  blr
++#else
+ 	.globl __MINGW_USYMBOL(_chgsignl)
+ 	.def	__MINGW_USYMBOL(_chgsignl);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(_chgsignl):
+@@ -46,4 +53,4 @@ __MINGW_USYMBOL(_chgsignl):
+ 	fldt	4(%esp)
+ 	ret
+ #endif
+-
++#endif
+diff --git a/mingw-w64-crt/math/acosf.c b/mingw-w64-crt/math/acosf.c
+index 5c0027a5..92a35cf9 100644
+--- a/mingw-w64-crt/math/acosf.c
++++ b/mingw-w64-crt/math/acosf.c
+@@ -16,6 +16,9 @@ acosf (float x)
+   float res = 0.0F;
+ 
+   /* acosl = atanl (sqrtl(1 - x^2) / x) */
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm (	"fld	%%st\n\t"
+ 	"fmul	%%st(0)\n\t"		/* x^2 */
+ 	"fld1\n\t"
+@@ -24,5 +27,6 @@ acosf (float x)
+ 	"fxch	%%st(1)\n\t"
+ 	"fpatan"
+ 	: "=t" (res) : "0" (x) : "st(1)");
++  #endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/acosl.c b/mingw-w64-crt/math/acosl.c
+index 511b5def..691a20e0 100644
+--- a/mingw-w64-crt/math/acosl.c
++++ b/mingw-w64-crt/math/acosl.c
+@@ -10,6 +10,9 @@ long double acosl (long double x)
+   long double res = 0.0L;
+ 
+   /* acosl = atanl (sqrtl(1 - x^2) / x) */
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm (	"fld	%%st\n\t"
+ 	"fmul	%%st(0)\n\t"		/* x^2 */
+ 	"fld1\n\t"
+@@ -18,5 +21,6 @@ long double acosl (long double x)
+ 	"fxch	%%st(1)\n\t"
+ 	"fpatan"
+ 	: "=t" (res) : "0" (x) : "st(1)");
++  #endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/asinf.c b/mingw-w64-crt/math/asinf.c
+index 045a7983..e6d3d7a3 100644
+--- a/mingw-w64-crt/math/asinf.c
++++ b/mingw-w64-crt/math/asinf.c
+@@ -16,6 +16,9 @@ float asinf (float x)
+ {
+   float res = 0.0F;
+ 
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm (	"fld	%%st\n\t"
+ 	"fmul	%%st(0)\n\t"			/* x^2 */
+ 	"fld1\n\t"
+@@ -23,5 +26,6 @@ float asinf (float x)
+ 	"fsqrt\n\t"				/* sqrt (1 - x^2) */
+ 	"fpatan"
+ 	: "=t" (res) : "0" (x) : "st(1)");
++  #endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/asinl.c b/mingw-w64-crt/math/asinl.c
+index a4d8746b..94d94107 100644
+--- a/mingw-w64-crt/math/asinl.c
++++ b/mingw-w64-crt/math/asinl.c
+@@ -16,6 +16,9 @@ long double asinl (long double x)
+ {
+   long double res = 0.0L;
+ 
++#ifdef __powerpc__
++  /* XXX */
++#else
+   asm (	"fld	%%st\n\t"
+ 	"fmul	%%st(0)\n\t"			/* x^2 */
+ 	"fld1\n\t"
+@@ -23,5 +26,6 @@ long double asinl (long double x)
+ 	"fsqrt\n\t"				/* sqrt (1 - x^2) */
+ 	"fpatan"
+ 	: "=t" (res) : "0" (x) : "st(1)");
++#endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/atan2.c b/mingw-w64-crt/math/atan2.c
+index 986954b2..1d934d18 100644
+--- a/mingw-w64-crt/math/atan2.c
++++ b/mingw-w64-crt/math/atan2.c
+@@ -10,6 +10,10 @@ double
+ atan2 (double y, double x)
+ {
+   double res = 0.0;
++#ifdef __powerpc__
++  /* XXX */
++#else
+   asm ("fpatan" : "=t" (res) : "u" (y), "0" (x) : "st(1)");
++#endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/atan2f.c b/mingw-w64-crt/math/atan2f.c
+index 0d54e066..c574dae6 100644
+--- a/mingw-w64-crt/math/atan2f.c
++++ b/mingw-w64-crt/math/atan2f.c
+@@ -15,6 +15,10 @@ float
+ atan2f (float y, float x)
+ {
+   float res = 0.0F;
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm ("fpatan" : "=t" (res) : "u" (y), "0" (x) : "st(1)");
++  #endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/atan2l.c b/mingw-w64-crt/math/atan2l.c
+index a32b097f..31f99c65 100644
+--- a/mingw-w64-crt/math/atan2l.c
++++ b/mingw-w64-crt/math/atan2l.c
+@@ -9,6 +9,10 @@ long double
+ atan2l (long double y, long double x)
+ {
+   long double res = 0.0L;
++#ifdef __powerpc__
++  /* XXX */
++#else
+   asm ("fpatan" : "=t" (res) : "u" (y), "0" (x) : "st(1)");
++#endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/atanf.c b/mingw-w64-crt/math/atanf.c
+index 85fadd8c..9b185017 100644
+--- a/mingw-w64-crt/math/atanf.c
++++ b/mingw-w64-crt/math/atanf.c
+@@ -16,7 +16,11 @@ atanf (float x)
+ {
+   float res = 0.0F;
+ 
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm ("fld1\n\t"
+        "fpatan" : "=t" (res) : "0" (x));
++  #endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/atanl.c b/mingw-w64-crt/math/atanl.c
+index b85d0535..04234a46 100644
+--- a/mingw-w64-crt/math/atanl.c
++++ b/mingw-w64-crt/math/atanl.c
+@@ -10,8 +10,12 @@ atanl (long double x)
+ {
+   long double res = 0.0L;
+ 
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm ("fld1\n\t"
+        "fpatan"
+        : "=t" (res) : "0" (x));
++  #endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/cbrt.c b/mingw-w64-crt/math/cbrt.c
+index 00550523..795137d1 100644
+--- a/mingw-w64-crt/math/cbrt.c
++++ b/mingw-w64-crt/math/cbrt.c
+@@ -11,6 +11,9 @@ static const double CBRT4  = 1.5874010519681994747517;
+ static const double CBRT2I = 0.79370052598409973737585;
+ static const double CBRT4I = 0.62996052494743658238361;
+ 
++#ifdef __powerpc__
++double cbrt(double x) { return 0.0; }
++#else
+ #ifndef __MINGW32__
+ extern double frexp ( double, int * );
+ extern double ldexp ( double, int );
+@@ -102,3 +105,4 @@ double cbrt(double x)
+ 		x = -x;
+ 	return (x);
+ }
++#endif
+diff --git a/mingw-w64-crt/math/ceil.S b/mingw-w64-crt/math/ceil.S
+index 134029cb..4f6f8d32 100644
+--- a/mingw-w64-crt/math/ceil.S
++++ b/mingw-w64-crt/math/ceil.S
+@@ -8,6 +8,11 @@
+ 	.file	"ceil.S"
+ 	.text
+ 	.align 4
++#ifdef __powerpc__
++  .globl ceil
++ceil:
++  blr
++#else
+ 	.globl __MINGW_USYMBOL(ceil)
+ 	.def	__MINGW_USYMBOL(ceil);	.scl	2;	.type	32;	.endef
+ #ifdef __x86_64__
+@@ -129,3 +134,4 @@ __MINGW_USYMBOL(ceil):
+ 	addl	$8,%esp
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/ceilf.S b/mingw-w64-crt/math/ceilf.S
+index fe64149d..105c1ca9 100644
+--- a/mingw-w64-crt/math/ceilf.S
++++ b/mingw-w64-crt/math/ceilf.S
+@@ -8,6 +8,11 @@
+ 	.file	"ceilf.S"
+ 	.text
+ 	.align 4
++#ifdef __powerpc__
++  .globl ceilf
++ceilf:
++  blr
++#else
+ 	.globl __MINGW_USYMBOL(ceilf)
+ 	.def	__MINGW_USYMBOL(ceilf);	.scl	2;	.type	32;	.endef
+ #ifdef __x86_64__
+@@ -124,3 +129,4 @@ __MINGW_USYMBOL(ceilf):
+ 	addl	$8,%esp
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/ceill.S b/mingw-w64-crt/math/ceill.S
+index 724dd526..90ec125c 100644
+--- a/mingw-w64-crt/math/ceill.S
++++ b/mingw-w64-crt/math/ceill.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl ceill
++ceill:
++  blr
++#else
+ 	.globl __MINGW_USYMBOL(ceill)
+ 	.def	__MINGW_USYMBOL(ceill);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(ceill):
+@@ -69,3 +74,4 @@ __MINGW_USYMBOL(ceill):
+ 	addl $8,%esp
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/copysignl.S b/mingw-w64-crt/math/copysignl.S
+index 1ee4a452..b4edfce4 100644
+--- a/mingw-w64-crt/math/copysignl.S
++++ b/mingw-w64-crt/math/copysignl.S
+@@ -17,10 +17,14 @@
+ #else
+ 	.align 4
+ #endif
+-
++#ifdef __powerpc__
++  .globl copysignl
++copysignl:
++  blr
++#else
+ 	.globl __MINGW_USYMBOL(copysignl)
+ 	.def	__MINGW_USYMBOL(copysignl);	.scl	2;	.type	32;	.endef
+-__MINGW_USYMBOL(copysignl):
++  __MINGW_USYMBOL(copysignl):
+ #if defined(_AMD64_) || defined(__x86_64__)
+ 	movq	(%rdx), %rax
+ 	movq	%rax, (%rcx)
+@@ -56,3 +60,4 @@ __MINGW_USYMBOL(copysignl):
+ 	fldt	4(%esp)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/cosl_internal.S b/mingw-w64-crt/math/cosl_internal.S
+index 3c8f60d1..2d923835 100644
+--- a/mingw-w64-crt/math/cosl_internal.S
++++ b/mingw-w64-crt/math/cosl_internal.S
+@@ -12,7 +12,12 @@
+ #else
+ 	.align 4
+ #endif
+-.globl __MINGW_USYMBOL(__cosl_internal)
++#ifdef __powerpc__
++  .globl __cosl_internal
++__cosl_internal:
++  blr
++#else
++  .globl __MINGW_USYMBOL(__cosl_internal)
+ 	.def	__MINGW_USYMBOL(__cosl_internal);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(__cosl_internal):
+ #ifdef __x86_64__
+@@ -52,4 +57,4 @@ __MINGW_USYMBOL(__cosl_internal):
+ 	fcos
+ 	ret
+ #endif
+-
++#endif
+diff --git a/mingw-w64-crt/math/cossin.c b/mingw-w64-crt/math/cossin.c
+index 0095daa6..fd09eb86 100644
+--- a/mingw-w64-crt/math/cossin.c
++++ b/mingw-w64-crt/math/cossin.c
+@@ -12,6 +12,9 @@ void sincos (double __x, double *p_sin, double *p_cos)
+ {
+   long double c, s;
+ 
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   __asm__ __volatile__ ("fsincos\n\t"
+     "fnstsw    %%ax\n\t"
+     "testl     $0x400, %%eax\n\t"
+@@ -26,6 +29,7 @@ void sincos (double __x, double *p_sin, double *p_cos)
+     "fstp      %%st(1)\n\t"
+     "fsincos\n\t"
+     "1:" : "=t" (c), "=u" (s) : "0" (__x));
++  #endif
+   *p_sin = (double) s;
+   *p_cos = (double) c;
+ }
+@@ -34,6 +38,9 @@ void sincosf (float __x, float *p_sin, float *p_cos)
+ {
+   long double c, s;
+ 
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   __asm__ __volatile__ ("fsincos\n\t"
+     "fnstsw    %%ax\n\t"
+     "testl     $0x400, %%eax\n\t"
+@@ -48,6 +55,7 @@ void sincosf (float __x, float *p_sin, float *p_cos)
+     "fstp      %%st(1)\n\t"
+     "fsincos\n\t"
+     "1:" : "=t" (c), "=u" (s) : "0" (__x));
++  #endif
+   *p_sin = (float) s;
+   *p_cos = (float) c;
+ }
+@@ -56,6 +64,9 @@ void sincosl (long double __x, long double *p_sin, long double *p_cos)
+ {
+   long double c, s;
+ 
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   __asm__ __volatile__ ("fsincos\n\t"
+     "fnstsw    %%ax\n\t"
+     "testl     $0x400, %%eax\n\t"
+@@ -70,6 +81,7 @@ void sincosl (long double __x, long double *p_sin, long double *p_cos)
+     "fstp      %%st(1)\n\t"
+     "fsincos\n\t"
+     "1:" : "=t" (c), "=u" (s) : "0" (__x));
++  #endif
+   *p_sin = s;
+   *p_cos = c;
+ }
+diff --git a/mingw-w64-crt/math/exp.def.h b/mingw-w64-crt/math/exp.def.h
+index 6f1ab8eb..50571921 100644
+--- a/mingw-w64-crt/math/exp.def.h
++++ b/mingw-w64-crt/math/exp.def.h
+@@ -52,6 +52,9 @@ static long double
+ __expl_internal (long double x)
+ {
+   long double res = 0.0L;
++#ifdef __powerpc__
++  /* XXX */
++#else
+   asm ("fldl2e\n\t"             /* 1  log2(e)         */
+        "fmul %%st(1),%%st\n\t"  /* 1  x log2(e)       */
+ 
+@@ -100,6 +103,7 @@ __expl_internal (long double x)
+        "fstp	%%st(1)\n\t"    /* 1  */
+        "fstp	%%st(1)\n\t"    /* 0  */
+        : "=t" (res) : "0" (x), "m" (c0), "m" (c1) : "ax", "dx");
++#endif
+   return res;
+ }
+ 
+diff --git a/mingw-w64-crt/math/exp2.S b/mingw-w64-crt/math/exp2.S
+index 37d4a2b8..2a2abeec 100644
+--- a/mingw-w64-crt/math/exp2.S
++++ b/mingw-w64-crt/math/exp2.S
+@@ -12,7 +12,12 @@
+ #else
+ 	.align 4
+ #endif
+-.globl __MINGW_USYMBOL(exp2)
++#ifdef __powerpc__
++  .globl exp2
++exp2:
++  blr
++#else
++  .globl __MINGW_USYMBOL(exp2)
+ 	.def	__MINGW_USYMBOL(exp2);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(exp2):
+ #ifdef __x86_64__
+@@ -92,3 +97,4 @@ __MINGW_USYMBOL(exp2):
+ 	fldz				/* Set result to 0.  */
+ 2:	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/exp2f.S b/mingw-w64-crt/math/exp2f.S
+index fa9f19c5..9ade5489 100644
+--- a/mingw-w64-crt/math/exp2f.S
++++ b/mingw-w64-crt/math/exp2f.S
+@@ -12,7 +12,12 @@
+ #else
+ 	.align 4
+ #endif
+-.globl __MINGW_USYMBOL(exp2f)
++#ifdef __powerpc__
++  .globl exp2f
++exp2f:
++  blr
++#else
++  .globl __MINGW_USYMBOL(exp2f)
+ 	.def	__MINGW_USYMBOL(exp2f);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(exp2f):
+ #ifdef __x86_64__
+@@ -92,3 +97,4 @@ __MINGW_USYMBOL(exp2f):
+ 	fldz				/* Set result to 0.  */
+ 2:	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/exp2l.S b/mingw-w64-crt/math/exp2l.S
+index 2e58c37b..c24103a0 100644
+--- a/mingw-w64-crt/math/exp2l.S
++++ b/mingw-w64-crt/math/exp2l.S
+@@ -12,7 +12,12 @@
+ #else
+ 	.align 4
+ #endif
+-.globl __MINGW_USYMBOL(exp2l)
++#ifdef __powerpc__
++  .globl exp2l
++exp2l:
++  blr
++#else
++  .globl __MINGW_USYMBOL(exp2l)
+ 	.def	__MINGW_USYMBOL(exp2l);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(exp2l):
+ #ifdef __x86_64__
+@@ -90,3 +95,4 @@ __MINGW_USYMBOL(exp2l):
+ 	fldz				/* Set result to 0.  */
+ 2:	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/expm1.def.h b/mingw-w64-crt/math/expm1.def.h
+index 93460316..3a99b750 100644
+--- a/mingw-w64-crt/math/expm1.def.h
++++ b/mingw-w64-crt/math/expm1.def.h
+@@ -65,7 +65,11 @@ __FLT_ABI(expm1) (__FLT_TYPE x)
+   if (__FLT_ABI (fabs) (x) < __FLT_LOGE2)
+     {
+       x /= __FLT_LOGE2;
++      #ifdef __powerpc__
++      /* XXX */
++      #else
+       __asm__ __volatile__ ("f2xm1" : "=t" (x) : "0" (x));
++      #endif
+       return x;
+     }
+   return __FLT_ABI (exp) (x) - __FLT_CST (1.0);
+diff --git a/mingw-w64-crt/math/fastmath.h b/mingw-w64-crt/math/fastmath.h
+index a6bb467c..8d4c434b 100644
+--- a/mingw-w64-crt/math/fastmath.h
++++ b/mingw-w64-crt/math/fastmath.h
+@@ -19,21 +19,33 @@
+ static __inline__ double __fast_sqrt (double x)
+ {
+   double res;
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm __volatile__ ("fsqrt" : "=t" (res) : "0" (x));
++  #endif
+   return res;
+ }
+ 
+ static __inline__ long double __fast_sqrtl (long double x)
+ {
+   long double res;
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm __volatile__ ("fsqrt" : "=t" (res) : "0" (x));
++  #endif
+   return res;
+ }
+ 
+ static __inline__ float __fast_sqrtf (float x)
+ {
+   float res;
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm __volatile__ ("fsqrt" : "=t" (res) : "0" (x));
++  #endif
+   return res;
+ }
+ 
+@@ -41,22 +53,30 @@ static __inline__ float __fast_sqrtf (float x)
+ static __inline__ double __fast_log (double x)
+ {
+    double res;
++   #ifdef __powerpc__
++   /* XXX */
++   #else
+    asm __volatile__
+      ("fldln2\n\t"
+       "fxch\n\t"
+       "fyl2x"
+        : "=t" (res) : "0" (x) : "st(1)");
++   #endif
+    return res;
+ }
+ 
+ static __inline__ long double __fast_logl (long double x)
+ {
+   long double res;
+-   asm __volatile__
++  #ifdef __powerpc__
++  /* XXX */
++  #else
++  asm __volatile__
+      ("fldln2\n\t"
+       "fxch\n\t"
+       "fyl2x"
+        : "=t" (res) : "0" (x) : "st(1)");
++  #endif
+    return res;
+ }
+ 
+@@ -64,11 +84,15 @@ static __inline__ long double __fast_logl (long double x)
+ static __inline__ float __fast_logf (float x)
+ {
+    float res;
++   #ifdef __powerpc__
++   /* XXX */
++   #else
+    asm __volatile__
+      ("fldln2\n\t"
+       "fxch\n\t"
+       "fyl2x"
+        : "=t" (res) : "0" (x) : "st(1)");
++   #endif
+    return res;
+ }
+ 
+@@ -79,11 +103,15 @@ static __inline__ double __fast_log1p (double x)
+   if (fabs (x) >= 1.0 - 0.5 * 1.41421356237309504880)
+     res = __fast_log (1.0 + x);
+   else
++    #ifdef __powerpc__
++    /* XXX */
++    #else
+     asm __volatile__
+       ("fldln2\n\t"
+        "fxch\n\t"
+        "fyl2xp1"
+        : "=t" (res) : "0" (x) : "st(1)");
++  #endif
+    return res;
+ }
+ 
+@@ -94,11 +122,15 @@ static __inline__ long double __fast_log1pl (long double x)
+   if (fabsl (x) >= 1.0L - 0.5L * 1.41421356237309504880L)
+     res = __fast_logl (1.0L + x);
+   else
++    #ifdef __powerpc__
++    /* XXX */
++    #else
+     asm __volatile__
+       ("fldln2\n\t"
+        "fxch\n\t"
+        "fyl2xp1"
+        : "=t" (res) : "0" (x) : "st(1)");
++  #endif
+    return res;
+ }
+ 
+@@ -109,11 +141,15 @@ static __inline__ float __fast_log1pf (float x)
+   if (fabsf (x) >= 1.0 - 0.5 * 1.41421356237309504880)
+     res = __fast_logf (1.0 + x);
+   else
++    #ifdef __powerpc__
++    /* XXX */
++    #else
+     asm __volatile__
+       ("fldln2\n\t"
+        "fxch\n\t"
+        "fyl2xp1"
+        : "=t" (res) : "0" (x) : "st(1)");
++  #endif
+    return res;
+ }
+ 
+diff --git a/mingw-w64-crt/math/floor.S b/mingw-w64-crt/math/floor.S
+index 5c314045..da4e8c4d 100644
+--- a/mingw-w64-crt/math/floor.S
++++ b/mingw-w64-crt/math/floor.S
+@@ -7,6 +7,11 @@
+ 
+ 	.file	"floor.S"
+ 	.text
++#ifdef __powerpc__
++  .globl floor
++floor:
++  blr
++#else
+ 	.p2align 4,,15
+ 	.globl __MINGW_USYMBOL(floor)
+ 	.def	__MINGW_USYMBOL(floor);	.scl	2;	.type	32;	.endef
+@@ -181,3 +186,4 @@ __MINGW_USYMBOL(floor):
+ 	addl	$8,%esp
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/floorf.S b/mingw-w64-crt/math/floorf.S
+index 45da320f..6341fbff 100644
+--- a/mingw-w64-crt/math/floorf.S
++++ b/mingw-w64-crt/math/floorf.S
+@@ -7,6 +7,11 @@
+ 
+ 	.file	"floorf.S"
+ 	.text
++#ifdef __powerpc__
++  .globl floorf
++floorf:
++  blr
++#else
+ 	.p2align 4,,15
+ 	.globl __MINGW_USYMBOL(floorf)
+ 	.def	__MINGW_USYMBOL(floorf);	.scl	2;	.type	32;	.endef
+@@ -64,3 +69,4 @@ __MINGW_USYMBOL(floorf):
+ 	addl	$8,%esp
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/floorl.S b/mingw-w64-crt/math/floorl.S
+index 73987436..aec50afe 100644
+--- a/mingw-w64-crt/math/floorl.S
++++ b/mingw-w64-crt/math/floorl.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl floorl
++floorl:
++  blr
++#else
+ 	.globl __MINGW_USYMBOL(floorl)
+ 	.def	__MINGW_USYMBOL(floorl);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(floorl):
+@@ -77,3 +82,4 @@ __MINGW_USYMBOL(floorl):
+ 	addl	$8,%esp
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/fma.S b/mingw-w64-crt/math/fma.S
+index 74becde6..55ba68f6 100644
+--- a/mingw-w64-crt/math/fma.S
++++ b/mingw-w64-crt/math/fma.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl fma
++fma:
++  blr
++#else
+ 	.p2align 4,,15
+ 	.globl __MINGW_USYMBOL(fma)
+ 	.def	__MINGW_USYMBOL(fma);	.scl	2;	.type	32;	.endef
+@@ -40,3 +45,5 @@ __MINGW_USYMBOL(fma):
+ 	faddp
+ 	ret
+ #endif
++#endif
++
+diff --git a/mingw-w64-crt/math/fmaf.S b/mingw-w64-crt/math/fmaf.S
+index 6bc7ef03..b1f74e06 100644
+--- a/mingw-w64-crt/math/fmaf.S
++++ b/mingw-w64-crt/math/fmaf.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 2
+ #endif
++#ifdef __powerpc__
++  .globl fmaf
++fmaf:
++  blr
++#else
+ 	.p2align 4,,15
+ 	.globl __MINGW_USYMBOL(fmaf)
+ 	.def	__MINGW_USYMBOL(fmaf);	.scl	2;	.type	32;	.endef
+@@ -40,4 +45,4 @@ __MINGW_USYMBOL(fmaf):
+ 	faddp
+ 	ret
+ #endif
+-
++#endif
+diff --git a/mingw-w64-crt/math/fmod.c b/mingw-w64-crt/math/fmod.c
+index 29787e24..0f7da1d5 100644
+--- a/mingw-w64-crt/math/fmod.c
++++ b/mingw-w64-crt/math/fmod.c
+@@ -10,11 +10,15 @@ fmod (double x, double y)
+ {
+   double res = 0.0;
+ 
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm ("1:\tfprem\n\t"
+        "fstsw   %%ax\n\t"
+        "sahf\n\t"
+        "jp      1b\n\t"
+        "fstp    %%st(1)"
+        : "=t" (res) : "0" (x), "u" (y) : "ax", "st(1)");
++  #endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/fmodf.c b/mingw-w64-crt/math/fmodf.c
+index e68fec2e..c78a486c 100644
+--- a/mingw-w64-crt/math/fmodf.c
++++ b/mingw-w64-crt/math/fmodf.c
+@@ -17,12 +17,15 @@ float
+ fmodf (float x, float y)
+ {
+   float res = 0.0F;
+-
++#ifdef __powerpc__
++  /* XXX */
++#else
+   asm ("1:\tfprem\n\t"
+        "fstsw   %%ax\n\t"
+        "sahf\n\t"
+        "jp      1b\n\t"
+        "fstp    %%st(1)"
+        : "=t" (res) : "0" (x), "u" (y) : "ax", "st(1)");
++#endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/fmodl.c b/mingw-w64-crt/math/fmodl.c
+index 6224db13..b4a9eddd 100644
+--- a/mingw-w64-crt/math/fmodl.c
++++ b/mingw-w64-crt/math/fmodl.c
+@@ -10,11 +10,15 @@ fmodl (long double x, long double y)
+ {
+   long double res = 0.0L;
+ 
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   asm ("1:\tfprem\n\t"
+        "fstsw   %%ax\n\t"
+        "sahf\n\t"
+        "jp      1b\n\t"
+        "fstp    %%st(1)"
+        : "=t" (res) : "0" (x), "u" (y) : "ax", "st(1)");
++  #endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/frexpl.S b/mingw-w64-crt/math/frexpl.S
+index f9fcc6be..5276f6d8 100644
+--- a/mingw-w64-crt/math/frexpl.S
++++ b/mingw-w64-crt/math/frexpl.S
+@@ -15,7 +15,12 @@
+ #else
+ 	.align 2
+ #endif
+-.globl __MINGW_USYMBOL(frexpl)
++#ifdef __powerpc__
++  .globl frexpl
++frexpl:
++  blr
++#else
++  .globl __MINGW_USYMBOL(frexpl)
+ __MINGW_USYMBOL(frexpl):
+ #ifdef __x86_64__
+ 	pushq %rbp
+@@ -128,3 +133,4 @@ L24:
+ 	leave
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/fucom.c b/mingw-w64-crt/math/fucom.c
+index 722af842..d5add1cc 100644
+--- a/mingw-w64-crt/math/fucom.c
++++ b/mingw-w64-crt/math/fucom.c
+@@ -8,11 +8,15 @@ int __fp_unordered_compare (long double x,  long double y);
+ int 
+ __fp_unordered_compare (long double x,  long double y){
+   unsigned short retval;
++  #ifdef __powerpc__
++  /* XXX */
++  #else
+   __asm__ __volatile__ (
+ 	"fucom %%st(1);"
+ 	"fnstsw;"
+ 	: "=a" (retval)
+ 	: "t" (x), "u" (y)
+ 	);
++  #endif
+   return retval;
+ }
+diff --git a/mingw-w64-crt/math/ilogb.S b/mingw-w64-crt/math/ilogb.S
+index c54f350d..5f96a4bb 100644
+--- a/mingw-w64-crt/math/ilogb.S
++++ b/mingw-w64-crt/math/ilogb.S
+@@ -8,7 +8,12 @@
+ 	.file	"ilogb.S"
+ 	.text
+ 	.p2align 4,,15
+-.globl __MINGW_USYMBOL(ilogb)
++#ifdef __powerpc__
++  .globl ilogb
++ilogb:
++  blr
++#else
++  .globl __MINGW_USYMBOL(ilogb)
+ 	.def	__MINGW_USYMBOL(ilogb);	.scl	2;	.type	32;	.endef
+ #ifdef __x86_64__
+ 	.seh_proc __MINGW_USYMBOL(ilogb)
+@@ -141,3 +146,4 @@ ilogb (double x)
+ 	movl	$0x7fffffff, %eax
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/ilogbf.S b/mingw-w64-crt/math/ilogbf.S
+index 8b246556..3588f47f 100644
+--- a/mingw-w64-crt/math/ilogbf.S
++++ b/mingw-w64-crt/math/ilogbf.S
+@@ -8,7 +8,12 @@
+ 	.file	"ilogbf.S"
+ 	.text
+ 	.p2align 4,,15
+-.globl __MINGW_USYMBOL(ilogbf)
++#ifdef __powerpc__
++  .globl ilgobf
++ilogbf:
++  blr
++#else
++  .globl __MINGW_USYMBOL(ilogbf)
+ 	.def	__MINGW_USYMBOL(ilogbf);	.scl	2;	.type	32;	.endef
+ #ifdef __x86_64__
+ 	.seh_proc __MINGW_USYMBOL(ilogbf)
+@@ -107,3 +112,4 @@ ilogbf (float x)
+ 	movl	$0x7fffffff, %eax
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/ilogbl.S b/mingw-w64-crt/math/ilogbl.S
+index f68082ce..9749ed71 100644
+--- a/mingw-w64-crt/math/ilogbl.S
++++ b/mingw-w64-crt/math/ilogbl.S
+@@ -12,7 +12,12 @@
+ #else
+ 	.align 4
+ #endif
+-.globl __MINGW_USYMBOL(ilogbl)
++#ifdef __powerpc__
++  .globl ilgobl
++ilogbl:
++  blr
++#else
++  .globl __MINGW_USYMBOL(ilogbl)
+ 	.def	__MINGW_USYMBOL(ilogbl);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(ilogbl):
+ #ifdef __x86_64__
+@@ -63,3 +68,4 @@ __MINGW_USYMBOL(ilogbl):
+ 	movl	$0x7fffffff, %eax
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/internal_logl.S b/mingw-w64-crt/math/internal_logl.S
+index f8a07577..c825ccd3 100644
+--- a/mingw-w64-crt/math/internal_logl.S
++++ b/mingw-w64-crt/math/internal_logl.S
+@@ -18,7 +18,12 @@ one:	.double 1.0
+ 	   fyl2xp1 instruction.  */
+ limit:	.double 0.29
+ 
+-.globl __MINGW_USYMBOL(__logl_internal)
++#ifdef __powerpc__
++  .globl __logl_internal
++__logl_internal:
++  blr
++#else
++  .globl __MINGW_USYMBOL(__logl_internal)
+ 	.def	__MINGW_USYMBOL(__logl_internal);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(__logl_internal):
+ #ifdef __x86_64__
+@@ -64,3 +69,4 @@ __MINGW_USYMBOL(__logl_internal):
+ 	fyl2x			// log(x)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/ldexp.c b/mingw-w64-crt/math/ldexp.c
+index 59917ac8..98470386 100644
+--- a/mingw-w64-crt/math/ldexp.c
++++ b/mingw-w64-crt/math/ldexp.c
+@@ -12,9 +12,13 @@ double ldexp(double x, int expn)
+   if (!isfinite (x) || x == 0.0)
+     return x;
+ 
++#ifdef __powerpc__
++  /* XXX */
++#else
+   __asm__ __volatile__ ("fscale"
+   	    : "=t" (res)
+ 	    : "0" (x), "u" ((double) expn));
++#endif
+ 
+   if (!isfinite (res) || res == 0.0L)
+     errno = ERANGE;
+diff --git a/mingw-w64-crt/math/ldexpl.c b/mingw-w64-crt/math/ldexpl.c
+index fde31a23..d19fe15e 100644
+--- a/mingw-w64-crt/math/ldexpl.c
++++ b/mingw-w64-crt/math/ldexpl.c
+@@ -12,9 +12,13 @@ long double ldexpl(long double x, int expn)
+   if (!isfinite (x) || x == 0.0L)
+     return x;
+ 
++#ifdef __powerpc__
++  /* XXX */
++#else
+   __asm__ __volatile__ ("fscale"
+   	    : "=t" (res)
+ 	    : "0" (x), "u" ((long double) expn));
++#endif
+ 
+   if (!isfinite (res) || res == 0.0L)
+     errno = ERANGE;
+diff --git a/mingw-w64-crt/math/log10l.S b/mingw-w64-crt/math/log10l.S
+index 33d45a3a..b0b76be7 100644
+--- a/mingw-w64-crt/math/log10l.S
++++ b/mingw-w64-crt/math/log10l.S
+@@ -24,9 +24,11 @@ limit:	.double 0.29
+ #else
+ 	.align 4
+ #endif
+-.globl __MINGW_USYMBOL(log10l)
++  .globl __MINGW_USYMBOL(log10l)
++#ifndef __powerpc__
+ 	.def	__MINGW_USYMBOL(log10l);	.scl	2;	.type	32;	.endef
+-__MINGW_USYMBOL(log10l):
++#endif
++  __MINGW_USYMBOL(log10l):
+ #ifdef __x86_64__
+ 	fldlg2			// log10(2)
+ 	fldt	(%rdx)		// x : log10(2)
+@@ -63,6 +65,8 @@ __MINGW_USYMBOL(log10l):
+ 	movq	$0,8(%rcx)
+ 	fstpt	(%rcx)
+ 	ret
++#elif defined(__powerpc__)
++  blr
+ #else
+ 	fldlg2			// log10(2)
+ 	fldt	4(%esp)		// x : log10(2)
+diff --git a/mingw-w64-crt/math/log1p.S b/mingw-w64-crt/math/log1p.S
+index c1a1d2fa..f8a8f982 100644
+--- a/mingw-w64-crt/math/log1p.S
++++ b/mingw-w64-crt/math/log1p.S
+@@ -21,7 +21,12 @@ one:	.double 1.0
+ /*
+  * Use the fyl2xp1 function when the argument is in the range -0.29 to 0.29,
+  * otherwise fyl2x with the needed extra computation.
+- */
++  */
++#ifdef __powerpc__
++  .globl log1p
++log1p:
++  blr
++#else
+ .globl __MINGW_USYMBOL(log1p) 
+ 	.def	__MINGW_USYMBOL(log1p);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(log1p):
+@@ -83,3 +88,4 @@ __MINGW_USYMBOL(log1p):
+ 	fstp	%st(1)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/log1pf.S b/mingw-w64-crt/math/log1pf.S
+index 259e8a8e..0a66ae0d 100644
+--- a/mingw-w64-crt/math/log1pf.S
++++ b/mingw-w64-crt/math/log1pf.S
+@@ -21,8 +21,13 @@ one:	.float 1.0
+ /*
+  * Use the fyl2xp1 function when the argument is in the range -0.29 to 0.29,
+  * otherwise fyl2x with the needed extra computation.
+- */
+-.globl __MINGW_USYMBOL(log1pf)
++  */
++#ifdef __powerpc__
++  .globl log1pf
++log1pf:
++  blr
++#else
++  .globl __MINGW_USYMBOL(log1pf)
+ 	.def	__MINGW_USYMBOL(log1pf);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(log1pf):
+ #ifdef __x86_64__
+@@ -83,3 +88,4 @@ __MINGW_USYMBOL(log1pf):
+ 	fstp	%st(1)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/log1pl.S b/mingw-w64-crt/math/log1pl.S
+index a56bcf4e..4066dc76 100644
+--- a/mingw-w64-crt/math/log1pl.S
++++ b/mingw-w64-crt/math/log1pl.S
+@@ -34,7 +34,12 @@ one:	.double 1.0
+ /*
+  * Use the fyl2xp1 function when the argument is in the range -0.29 to 0.29,
+  * otherwise fyl2x with the needed extra computation.
+- */
++  */
++#ifdef __powerpc__
++  .globl log1pl
++log1pl:
++  blr
++#else
+ .globl __MINGW_USYMBOL(log1pl)
+ 	.def	__MINGW_USYMBOL(log1pl);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(log1pl):
+@@ -100,3 +105,4 @@ __MINGW_USYMBOL(log1pl):
+ 	fstp	%st(1)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/log2.S b/mingw-w64-crt/math/log2.S
+index 54eecf75..48143850 100644
+--- a/mingw-w64-crt/math/log2.S
++++ b/mingw-w64-crt/math/log2.S
+@@ -18,6 +18,11 @@ one:	.double 1.0
+ 	   fyl2xp1 instruction.  */
+ limit:	.double 0.29
+ 
++#ifdef __powerpc__
++  .globl log2
++log2:
++  blr
++#else
+ .globl __MINGW_USYMBOL(log2)
+ 	.def	__MINGW_USYMBOL(log2);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(log2):
+@@ -83,3 +88,4 @@ __MINGW_USYMBOL(log2):
+ 	fstp	%st(1)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/log2f.S b/mingw-w64-crt/math/log2f.S
+index 5b01d15e..7829a0f2 100644
+--- a/mingw-w64-crt/math/log2f.S
++++ b/mingw-w64-crt/math/log2f.S
+@@ -18,6 +18,11 @@ one:	.double 1.0
+ 	   fyl2xp1 instruction.  */
+ limit:	.double 0.29
+ 
++#ifdef __powerpc__
++  .globl log2f
++log2f:
++  blr
++#else
+ .globl __MINGW_USYMBOL(log2f)
+ 	.def	__MINGW_USYMBOL(log2f);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(log2f):
+@@ -83,3 +88,4 @@ __MINGW_USYMBOL(log2f):
+ 	fstp	%st(1)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/log2l.S b/mingw-w64-crt/math/log2l.S
+index 771cd8ae..8f2c766c 100644
+--- a/mingw-w64-crt/math/log2l.S
++++ b/mingw-w64-crt/math/log2l.S
+@@ -18,6 +18,11 @@ one:	.double 1.0
+ 	   fyl2xp1 instruction.  */
+ limit:	.double 0.29
+ 
++#ifdef __powerpc__
++  .globl log2l
++log2l:
++  blr
++#else
+ .globl __MINGW_USYMBOL(log2l)
+ 	.def	__MINGW_USYMBOL(log2l);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(log2l):
+@@ -85,3 +90,4 @@ __MINGW_USYMBOL(log2l):
+ 	fstp	%st(1)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/logb.c b/mingw-w64-crt/math/logb.c
+index 5760d26e..beab3515 100644
+--- a/mingw-w64-crt/math/logb.c
++++ b/mingw-w64-crt/math/logb.c
+@@ -14,7 +14,7 @@
+ double
+ logb (double x)
+ {
+-#ifdef __x86_64__
++#if defined(__x86_64__) || defined(__powerpc__)
+   __mingw_dbl_type_t hlp;
+   int lx, hx;
+ 
+diff --git a/mingw-w64-crt/math/logbf.c b/mingw-w64-crt/math/logbf.c
+index 5a0429eb..40679a9c 100644
+--- a/mingw-w64-crt/math/logbf.c
++++ b/mingw-w64-crt/math/logbf.c
+@@ -14,7 +14,7 @@
+ float
+ logbf (float x)
+ {
+-#ifdef __x86_64__
++#if defined(__x86_64__) || defined(__powerpc__)
+     int v;
+     __mingw_flt_type_t hlp;
+ 
+diff --git a/mingw-w64-crt/math/logbl.c b/mingw-w64-crt/math/logbl.c
+index 310c4457..7fcf5b82 100644
+--- a/mingw-w64-crt/math/logbl.c
++++ b/mingw-w64-crt/math/logbl.c
+@@ -16,7 +16,11 @@ logbl (long double x)
+ {
+   long double res = 0.0L;
+ 
++#ifdef __powerpc__
++  /* XXX */
++#else
+   asm ("fxtract\n\t"
+        "fstp	%%st" : "=t" (res) : "0" (x));
++#endif
+   return res;
+ }
+diff --git a/mingw-w64-crt/math/nearbyint.S b/mingw-w64-crt/math/nearbyint.S
+index 8aec9bdb..cf4964f1 100644
+--- a/mingw-w64-crt/math/nearbyint.S
++++ b/mingw-w64-crt/math/nearbyint.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++  #ifdef __powerpc__
++  .globl nearbyint
++nearbyint:
++  blr
++#else
+ 	.globl __MINGW_USYMBOL(nearbyint)
+ 	.def	__MINGW_USYMBOL(nearbyint);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(nearbyint):
+@@ -55,3 +60,4 @@ __MINGW_USYMBOL(nearbyint):
+ 	popl	%eax
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/nearbyintf.S b/mingw-w64-crt/math/nearbyintf.S
+index 460e1a5e..9b258187 100644
+--- a/mingw-w64-crt/math/nearbyintf.S
++++ b/mingw-w64-crt/math/nearbyintf.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl nearbyintf
++nearbyintf:
++  blr
++#else
+ 	.globl __MINGW_USYMBOL(nearbyintf)
+ 	.def	__MINGW_USYMBOL(nearbyintf);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(nearbyintf):
+@@ -55,3 +60,4 @@ __MINGW_USYMBOL(nearbyintf):
+ 	popl	%eax
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/nearbyintl.S b/mingw-w64-crt/math/nearbyintl.S
+index f4262a2e..a8ed985f 100644
+--- a/mingw-w64-crt/math/nearbyintl.S
++++ b/mingw-w64-crt/math/nearbyintl.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl nearbyintl
++nearbyintl:
++  blr
++#else
+ 	.globl __MINGW_USYMBOL(nearbyintl)
+ 	.def	__MINGW_USYMBOL(nearbyintl);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(nearbyintl):
+@@ -56,3 +61,4 @@ __MINGW_USYMBOL(nearbyintl):
+ 	popl	%eax
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/pow.def.h b/mingw-w64-crt/math/pow.def.h
+index 5ef62119..98bfde08 100644
+--- a/mingw-w64-crt/math/pow.def.h
++++ b/mingw-w64-crt/math/pow.def.h
+@@ -79,9 +79,11 @@ static __FLT_TYPE
+ internal_modf (__FLT_TYPE value, __FLT_TYPE *iptr)
+ {
+   __FLT_TYPE int_part = (__FLT_TYPE) 0.0;
+-  /* truncate */ 
+   /* truncate */
+-#ifdef __x86_64__
++  /* truncate */
++#ifdef __powerpc__
++  /* XXX */
++#elif defined(__x86_64__)
+   asm ("pushq %%rax\n\tsubq $8, %%rsp\n"
+     "fnstcw 4(%%rsp)\n"
+     "movzwl 4(%%rsp), %%eax\n"
+@@ -199,10 +201,14 @@ __FLT_ABI(pow) (__FLT_TYPE x, __FLT_TYPE y)
+ 	  return -__FLT_NAN;
+ 	}
+       if (y == __FLT_CST(0.5))
++#ifdef __powerpc__
++        return 0;
++#else
+ 	{
+ 	  asm ("fsqrt" : "=t" (rslt) : "0" (x));
+ 	  return rslt;
+ 	}
++#endif
+     }
+   else if ((d <= (__FLT_TYPE) INT_MAX && d >= (__FLT_TYPE) INT_MIN))
+      return __FLT_ABI (__powi) (x, (int) y);
+diff --git a/mingw-w64-crt/math/remainder.S b/mingw-w64-crt/math/remainder.S
+index 5a713f90..a2bd8127 100644
+--- a/mingw-w64-crt/math/remainder.S
++++ b/mingw-w64-crt/math/remainder.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++  #ifdef __powerpc__
++  .globl remainder
++remainder:
++  blr
++#else
+ .globl __MINGW_USYMBOL(remainder)
+ 	.def	__MINGW_USYMBOL(remainder);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(remainder):
+@@ -38,3 +43,4 @@ __MINGW_USYMBOL(remainder):
+ 	fstp	%st(1)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/remainderf.S b/mingw-w64-crt/math/remainderf.S
+index c3a3a3dc..d2b1e0e9 100644
+--- a/mingw-w64-crt/math/remainderf.S
++++ b/mingw-w64-crt/math/remainderf.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl remainderf
++remainderf:
++  blr
++#else
+ .globl __MINGW_USYMBOL(remainder)
+ 	.def	__MINGW_USYMBOL(remainderf);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(remainderf):
+@@ -38,3 +43,4 @@ __MINGW_USYMBOL(remainderf):
+ 	fstp	%st(1)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/remainderl.S b/mingw-w64-crt/math/remainderl.S
+index a69e3829..20503bb5 100644
+--- a/mingw-w64-crt/math/remainderl.S
++++ b/mingw-w64-crt/math/remainderl.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl remainderl
++remainderl:
++  blr
++#else
+ .globl __MINGW_USYMBOL(remainderl)
+ 	.def	__MINGW_USYMBOL(remainderl);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(remainderl):
+@@ -37,3 +42,4 @@ __MINGW_USYMBOL(remainderl):
+ 	fstp	%st(1)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/remquo.S b/mingw-w64-crt/math/remquo.S
+index e90d4926..09dbe3c0 100644
+--- a/mingw-w64-crt/math/remquo.S
++++ b/mingw-w64-crt/math/remquo.S
+@@ -12,7 +12,12 @@
+ #else
+ 	.align 4
+ #endif
+-.globl __MINGW_USYMBOL(remquo)
++#ifdef __powerpc__
++  .globl remquo
++remquo:
++  blr
++#else
++  .globl __MINGW_USYMBOL(remquo)
+ __MINGW_USYMBOL(remquo):
+ #ifdef __x86_64__
+ 	movsd	%xmm1,-16(%rsp)
+@@ -73,3 +78,4 @@ __MINGW_USYMBOL(remquo):
+ 
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/remquof.S b/mingw-w64-crt/math/remquof.S
+index b78de974..17072a79 100644
+--- a/mingw-w64-crt/math/remquof.S
++++ b/mingw-w64-crt/math/remquof.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl remquof
++remquof:
++  blr
++#else
+ .globl __MINGW_USYMBOL(remquof)
+ __MINGW_USYMBOL(remquof):
+ #ifdef __x86_64__
+@@ -74,3 +79,4 @@ __MINGW_USYMBOL(remquof):
+ 
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/remquol.S b/mingw-w64-crt/math/remquol.S
+index 42cc2a78..c76c51b7 100644
+--- a/mingw-w64-crt/math/remquol.S
++++ b/mingw-w64-crt/math/remquol.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl remquol
++remquol:
++  blr
++#else
+ .globl __MINGW_USYMBOL(remquol)
+ __MINGW_USYMBOL(remquol):
+ #ifdef __x86_64__
+@@ -73,3 +78,4 @@ __MINGW_USYMBOL(remquol):
+       
+         ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/scalbn.S b/mingw-w64-crt/math/scalbn.S
+index 8afcf753..458258e6 100644
+--- a/mingw-w64-crt/math/scalbn.S
++++ b/mingw-w64-crt/math/scalbn.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl scalbn
++scalbn:
++  blr
++#else
+ .globl __MINGW_USYMBOL(scalbn)
+ 	.def	__MINGW_USYMBOL(scalbn);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(scalbn):
+@@ -38,4 +43,4 @@ __MINGW_USYMBOL(scalbn):
+ 
+ .globl __MINGW_USYMBOL(scalbln)
+ 	.set	__MINGW_USYMBOL(scalbln),__MINGW_USYMBOL(scalbn)
+-
++#endif
+\ No newline at end of file
+diff --git a/mingw-w64-crt/math/scalbnf.S b/mingw-w64-crt/math/scalbnf.S
+index 93a11f2a..f5e4e9f2 100644
+--- a/mingw-w64-crt/math/scalbnf.S
++++ b/mingw-w64-crt/math/scalbnf.S
+@@ -12,7 +12,12 @@
+ #else
+ 	.align 4
+ #endif
+-.globl __MINGW_USYMBOL(scalbnf)
++#ifdef __powerpc__
++  .globl scalbnf
++scalbnf:
++  blr
++#else
++  .globl __MINGW_USYMBOL(scalbnf)
+ 	.def	__MINGW_USYMBOL(scalbnf);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(scalbnf):
+ #ifdef __x86_64__
+@@ -38,3 +43,4 @@ __MINGW_USYMBOL(scalbnf):
+ .globl __MINGW_USYMBOL(scalblnf)
+ 	.set	__MINGW_USYMBOL(scalblnf),__MINGW_USYMBOL(scalbnf)
+ 
++#endif
+diff --git a/mingw-w64-crt/math/scalbnl.S b/mingw-w64-crt/math/scalbnl.S
+index 5ff0a68f..a4dfe505 100644
+--- a/mingw-w64-crt/math/scalbnl.S
++++ b/mingw-w64-crt/math/scalbnl.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl scalbnl
++scalbnl:
++  blr
++#else
+ .globl __MINGW_USYMBOL(scalbnl)
+ 	.def	__MINGW_USYMBOL(scalbnl);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(scalbnl):
+@@ -38,4 +43,4 @@ __MINGW_USYMBOL(scalbnl):
+ 
+ .globl __MINGW_USYMBOL(scalblnl)
+ 	.set	__MINGW_USYMBOL(scalblnl),__MINGW_USYMBOL(scalbnl)
+-
++#endif
+diff --git a/mingw-w64-crt/math/sinl_internal.S b/mingw-w64-crt/math/sinl_internal.S
+index 6d766b09..3951f538 100644
+--- a/mingw-w64-crt/math/sinl_internal.S
++++ b/mingw-w64-crt/math/sinl_internal.S
+@@ -12,6 +12,11 @@
+ #else
+ 	.align 4
+ #endif
++#ifdef __powerpc__
++  .globl __sinl_internal
++__sinl_internal:
++  blr
++#else
+ .globl __MINGW_USYMBOL(__sinl_internal)
+ 	.def	__MINGW_USYMBOL(__sinl_internal);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(__sinl_internal):
+@@ -56,3 +61,4 @@ __MINGW_USYMBOL(__sinl_internal):
+ 	fsin
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/sqrt.def.h b/mingw-w64-crt/math/sqrt.def.h
+index 602409a3..8d257377 100644
+--- a/mingw-w64-crt/math/sqrt.def.h
++++ b/mingw-w64-crt/math/sqrt.def.h
+@@ -84,6 +84,8 @@ __FLT_ABI (sqrt) (__FLT_TYPE x)
+   __fsqrt_internal(x);
+ #elif defined(_X86_) || defined(__i386__) || defined(_AMD64_) || defined(__x86_64__)
+   asm ("fsqrt" : "=t" (res) : "0" (x));
++#elif defined(__powerpc__)
++  __fsqrt_internal(x);
+ #else
+ #error Not supported on your platform yet
+ #endif
+diff --git a/mingw-w64-crt/math/tanl.S b/mingw-w64-crt/math/tanl.S
+index f11b5392..87013377 100644
+--- a/mingw-w64-crt/math/tanl.S
++++ b/mingw-w64-crt/math/tanl.S
+@@ -11,7 +11,12 @@
+ 	.align 8
+ #else
+ 	.align 4
+-#endif
++  #endif
++#ifdef __powerpc__
++  .globl tanl
++tanl:
++  blr
++#else
+ .globl __MINGW_USYMBOL(tanl)
+ 	.def	__MINGW_USYMBOL(tanl);	.scl	2;	.type	32;	.endef
+ __MINGW_USYMBOL(tanl):
+@@ -60,3 +65,4 @@ __MINGW_USYMBOL(tanl):
+ 	fstp	%st(0)
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/trunc.S b/mingw-w64-crt/math/trunc.S
+index 2430e5fd..6b3e870b 100755
+--- a/mingw-w64-crt/math/trunc.S
++++ b/mingw-w64-crt/math/trunc.S
+@@ -8,6 +8,11 @@
+ 	.file "trunc.S"
+ 	.text
+ 	.p2align 4,,15
++#ifdef __powerpc__
++  .globl trunc
++trunc:
++  blr
++#else
+ 	.globl __MINGW_USYMBOL(trunc)
+         .def    __MINGW_USYMBOL(trunc);  .scl    2;      .type   32;     .endef
+ 
+@@ -97,3 +102,4 @@ __MINGW_USYMBOL(trunc):
+ 	addl	$8, %esp
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/truncf.S b/mingw-w64-crt/math/truncf.S
+index b62d2d23..993dbeb3 100755
+--- a/mingw-w64-crt/math/truncf.S
++++ b/mingw-w64-crt/math/truncf.S
+@@ -6,7 +6,12 @@
+ #include <_mingw_mac.h>
+ 
+         .file "truncf.S"
+-        .text
++  .text
++#ifdef __powerpc__
++  .globl truncf
++truncf:
++  blr
++#else
+         .p2align 4,,15
+         .globl __MINGW_USYMBOL(truncf)
+         .def    __MINGW_USYMBOL(truncf);  .scl    2;      .type   32;     .endef
+@@ -77,3 +82,4 @@ __MINGW_USYMBOL(truncf):
+         addl    $8, %esp
+         ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/math/truncl.c b/mingw-w64-crt/math/truncl.c
+index ddc6af68..f1a80c6f 100644
+--- a/mingw-w64-crt/math/truncl.c
++++ b/mingw-w64-crt/math/truncl.c
+@@ -9,7 +9,7 @@
+ long double
+ truncl (long double _x)
+ {
+-#if defined(_ARM_) || defined(__arm__)
++#if defined(_ARM_) || defined(__arm__) || defined(__powerpc__)
+   return trunc(_x);
+ #else
+   long double retval = 0.0L;
+diff --git a/mingw-w64-crt/misc/feclearexcept.c b/mingw-w64-crt/misc/feclearexcept.c
+index b5a3b705..6a241d69 100644
+--- a/mingw-w64-crt/misc/feclearexcept.c
++++ b/mingw-w64-crt/misc/feclearexcept.c
+@@ -12,7 +12,8 @@ int __mingw_has_sse(void)
+ {
+   int cpuInfo[4],infoType = 1;
+   
+-#ifndef _WIN64
++#ifndef __powerpc__
++#ifdef _WIN64
+   int o_flag, n_flag;
+   
+   __asm__ volatile ("pushfl\n\tpopl %0" : "=mr" (o_flag));
+@@ -22,7 +23,7 @@ int __mingw_has_sse(void)
+   if (n_flag == o_flag)
+     return 0;
+ #endif
+-	
++
+   __asm__ __volatile__ (
+     "cpuid"
+     : "=a" (cpuInfo[0]), "=b" (cpuInfo[1]), "=c" (cpuInfo[2]),
+@@ -30,6 +31,7 @@ int __mingw_has_sse(void)
+     : "a" (infoType));
+   if (cpuInfo[3] & 0x2000000)
+     return 1;
++#endif
+   return 0;
+ }
+ #endif /* !(defined(_ARM_) || defined(__arm__)) */
+@@ -41,6 +43,9 @@ int __mingw_has_sse(void)
+ int feclearexcept (int excepts)
+ {
+   fenv_t _env;
++#if defined(__powerpc__)
++  /* XXX */
++#else
+ #if defined(_ARM_) || defined(__arm__)
+   __asm__ volatile ("fmrx %0, FPSCR" : "=r" (_env));
+   _env.__cw &= ~(excepts & FE_ALL_EXCEPT);
+@@ -64,5 +69,6 @@ int feclearexcept (int excepts)
+       __asm__ volatile ("ldmxcsr %0" : : "m" (_mxcsr));
+     }
+ #endif /* defined(_ARM_) || defined(__arm__) */
++#endif
+   return (0);
+ }
+diff --git a/mingw-w64-crt/misc/fegetenv.c b/mingw-w64-crt/misc/fegetenv.c
+index 96f57e4d..02c5d056 100644
+--- a/mingw-w64-crt/misc/fegetenv.c
++++ b/mingw-w64-crt/misc/fegetenv.c
+@@ -15,7 +15,9 @@ int __mingw_has_sse (void);
+ 
+ int fegetenv (fenv_t * envp)
+ {
+-#if defined(_ARM_) || defined(__arm__)
++#if defined(__powerpc__)
++  /* XXX */
++#elif defined(_ARM_) || defined(__arm__)
+   __asm__ volatile ("fmrx %0, FPSCR" : "=r" (*envp));
+ #else
+   __asm__ __volatile__ ("fnstenv %0;": "=m" (*envp));
+diff --git a/mingw-w64-crt/misc/fegetexceptflag.c b/mingw-w64-crt/misc/fegetexceptflag.c
+index e8dae963..ff142f6e 100644
+--- a/mingw-w64-crt/misc/fegetexceptflag.c
++++ b/mingw-w64-crt/misc/fegetexceptflag.c
+@@ -16,7 +16,9 @@ extern int __mingw_has_sse (void);
+ 
+ int fegetexceptflag (fexcept_t * flagp, int excepts)
+ {
+-#if defined(_ARM_) || defined(__arm__)
++#if defined(__powerpc__)
++  /* XXX */
++#elif defined(_ARM_) || defined(__arm__)
+   fenv_t _env;
+   __asm__ volatile ("fmrx %0, FPSCR" : "=r" (_env));
+   *flagp = _env.__cw & excepts & FE_ALL_EXCEPT;
+diff --git a/mingw-w64-crt/misc/fegetround.c b/mingw-w64-crt/misc/fegetround.c
+index b4b757bc..7ea0cdc3 100644
+--- a/mingw-w64-crt/misc/fegetround.c
++++ b/mingw-w64-crt/misc/fegetround.c
+@@ -9,6 +9,9 @@
+    The fegetround function returns the value of the rounding direction
+    macro representing the current rounding direction.  */
+ 
++#ifdef __powerpc__
++int fegetround(void) { return 0; }
++#else
+ int
+ fegetround (void)
+ {
+@@ -22,3 +25,4 @@ fegetround (void)
+   return (_control & (FE_TONEAREST | FE_DOWNWARD |  FE_UPWARD | FE_TOWARDZERO));
+ #endif /* defined(_ARM_) || defined(__arm__) */
+ }
++#endif
+diff --git a/mingw-w64-crt/misc/feholdexcept.c b/mingw-w64-crt/misc/feholdexcept.c
+index a2b78349..d265f0ec 100644
+--- a/mingw-w64-crt/misc/feholdexcept.c
++++ b/mingw-w64-crt/misc/feholdexcept.c
+@@ -13,7 +13,9 @@
+ 
+ int feholdexcept (fenv_t * envp)
+ {
+-#if defined(_ARM_) || defined(__arm__)
++#if defined(__powerpc__)
++  /* XXX */
++#elif defined(_ARM_) || defined(__arm__)
+   fenv_t _env;
+   __asm__ volatile ("fmrx %0, FPSCR" : "=r" (_env));
+   envp->__cw = _env.__cw;
+diff --git a/mingw-w64-crt/misc/feraiseexcept.c b/mingw-w64-crt/misc/feraiseexcept.c
+index 5175026a..cc138d6d 100644
+--- a/mingw-w64-crt/misc/feraiseexcept.c
++++ b/mingw-w64-crt/misc/feraiseexcept.c
+@@ -13,6 +13,9 @@
+    the inexact exception whenever it raises the overflow
+    or underflow exception is implementation-defined. */
+ 
++#ifdef __powerpc__
++int feraiseexcept (int excepts) { return 0; }
++#else
+ int feraiseexcept (int excepts)
+ {
+   fenv_t _env;
+@@ -28,3 +31,4 @@ int feraiseexcept (int excepts)
+ #endif /* defined(_ARM_) || defined(__arm__) */
+   return 0;
+ }
++#endif
+diff --git a/mingw-w64-crt/misc/fesetenv.c b/mingw-w64-crt/misc/fesetenv.c
+index d16dd655..57a3844e 100644
+--- a/mingw-w64-crt/misc/fesetenv.c
++++ b/mingw-w64-crt/misc/fesetenv.c
+@@ -26,7 +26,9 @@ extern void _fpreset(void);
+ 
+ int fesetenv (const fenv_t * envp)
+ {
+-#if defined(_ARM_) || defined(__arm__)
++#if defined(__powerpc__)
++  /* XXX */
++#elif defined(_ARM_) || defined(__arm__)
+   if (envp == FE_DFL_ENV)
+     /* Use the choice made at app startup */ 
+     _fpreset();
+diff --git a/mingw-w64-crt/misc/fesetexceptflag.c b/mingw-w64-crt/misc/fesetexceptflag.c
+index cb9ba3fe..ccbd5c76 100644
+--- a/mingw-w64-crt/misc/fesetexceptflag.c
++++ b/mingw-w64-crt/misc/fesetexceptflag.c
+@@ -24,7 +24,9 @@ int fesetexceptflag (const fexcept_t * flagp, int excepts)
+ 
+   excepts &= FE_ALL_EXCEPT;
+ 
+-#if defined(_ARM_) || defined(__arm__)
++#if defined(__powerpc__)
++  /* XXX */
++#elif defined(_ARM_) || defined(__arm__)
+   __asm__ volatile ("fmrx %0, FPSCR" : "=r" (_env));
+   _env.__cw &= ~excepts;
+   _env.__cw |= (*flagp & excepts);
+diff --git a/mingw-w64-crt/misc/fesetround.c b/mingw-w64-crt/misc/fesetround.c
+index 74dc3558..8c0edbc8 100644
+--- a/mingw-w64-crt/misc/fesetround.c
++++ b/mingw-w64-crt/misc/fesetround.c
+@@ -17,7 +17,9 @@ int __mingw_has_sse (void);
+ 
+ int fesetround (int mode)
+ {
+-#if defined(_ARM_) || defined(__arm__)
++#if defined(__powerpc__)
++  /* XXX */
++#elif defined(_ARM_) || defined(__arm__)
+   fenv_t _env;
+   if ((mode & ~(FE_TONEAREST | FE_DOWNWARD | FE_UPWARD | FE_TOWARDZERO)) != 0)
+     return -1;
+diff --git a/mingw-w64-crt/misc/fetestexcept.c b/mingw-w64-crt/misc/fetestexcept.c
+index f27d5353..829db1a2 100644
+--- a/mingw-w64-crt/misc/fetestexcept.c
++++ b/mingw-w64-crt/misc/fetestexcept.c
+@@ -20,7 +20,9 @@ extern int __mingw_has_sse (void);
+ 
+ int fetestexcept (int excepts)
+ {
+-#if defined(_ARM_) || defined(__arm__)
++#if defined(__powerpc__)
++  /* XXX */
++#elif defined(_ARM_) || defined(__arm__)
+   fenv_t _env;
+   __asm__ volatile ("fmrx %0, FPSCR" : "=r" (_env));
+   return _env.__cw & excepts & FE_ALL_EXCEPT;
+diff --git a/mingw-w64-crt/misc/mingw_getsp.S b/mingw-w64-crt/misc/mingw_getsp.S
+index 3c996581..15a6fc1e 100644
+--- a/mingw-w64-crt/misc/mingw_getsp.S
++++ b/mingw-w64-crt/misc/mingw_getsp.S
+@@ -13,7 +13,9 @@
+ 	.align 4
+ #endif
+ 	.globl __MINGW_USYMBOL(mingw_getsp)
++#ifndef __powerpc__
+ 	.def	__MINGW_USYMBOL(mingw_getsp);	.scl	2;	.type	32;	.endef
++#endif
+ __MINGW_USYMBOL(mingw_getsp):
+ #if defined(_AMD64_) || defined(__x86_64__)
+ 	leaq  8(%rsp),%rax
+@@ -24,6 +26,8 @@ __MINGW_USYMBOL(mingw_getsp):
+ #elif defined(_ARM_) || defined(__arm__)
+ 	mov	r0, sp
+ 	bx	lr
++#elif defined(__powerpc__)
++  blr
+ #endif
+ 
+ /* On ARM:
+@@ -35,7 +39,9 @@ __MINGW_USYMBOL(mingw_getsp):
+ */
+ #if !(defined(_ARM_) || defined(__arm__))
+ 	.globl __MINGW_USYMBOL(longjmp)
++#ifndef __powerpc__
+ 	.def	__MINGW_USYMBOL(longjmp);	.scl	2;	.type	32;	.endef
++#endif
+ __MINGW_USYMBOL(longjmp):
+ #if defined(_AMD64_) || defined(__x86_64__)
+ #ifndef __SEH__
+@@ -46,5 +52,9 @@ __MINGW_USYMBOL(longjmp):
+   jmpq *(%rax)
+ #elif defined(_X86_) || defined(__i386__)
+   jmp *__imp__longjmp
++#elif defined(__powerpc__)
++  lwz 3,0(3)
++  mtctr 3
++  bctr
+ #endif
+ #endif /* !(defined(_ARM_) || defined(__arm__)) */
+diff --git a/mingw-w64-crt/profile/gcrt0.c b/mingw-w64-crt/profile/gcrt0.c
+index 87c7d36a..081c3278 100644
+--- a/mingw-w64-crt/profile/gcrt0.c
++++ b/mingw-w64-crt/profile/gcrt0.c
+@@ -20,8 +20,18 @@ details. */
+ #include <_bsd_types.h>
+ #endif
+ 
+-extern u_char etext asm ("etext");
+-extern u_char eprol asm ("__eprol");
++#include <profile.h>
++
++extern u_char etext
++#ifndef __powerpc__
++asm ("etext")
++#endif
++;
++extern u_char eprol
++#ifndef __powerpc__
++asm ("__eprol")
++#endif
++;
+ extern void _mcleanup (void);
+ extern void monstartup (size_t, size_t);
+ void _monstartup (void) __attribute__((__constructor__));
+diff --git a/mingw-w64-crt/profile/mcountFunc.S b/mingw-w64-crt/profile/mcountFunc.S
+index e1b9136c..fa2e7e55 100644
+--- a/mingw-w64-crt/profile/mcountFunc.S
++++ b/mingw-w64-crt/profile/mcountFunc.S
+@@ -13,13 +13,18 @@
+ 	.align 4
+ #endif
+ 
++#ifdef __powerpc__
++  .globl _mcount
++_mcount:
++  blr
++#else
+ /* gcc always assumes the mcount public symbol has a single leading underscore
+    for our target.  See gcc/config/i386.h; it isn't overridden in
+    config/i386/cygming.h or any other places for mingw */
+ .globl _mcount
+         .def    _mcount;  .scl    2;      .type   32;     .endef
+ _mcount:
+-#ifndef _WIN64
++#ifdef _WIN64
+ 	push %ebp
+ 	mov %esp, %ebp
+ 	push %eax
+@@ -63,7 +68,13 @@ _mcount:
+ 	leave
+ 	ret
+ #endif
++#endif
+ 
++#ifdef __powerpc__
++        .globl __fentry__
++__fentry__:
++        blr
++#else
+ /* gcc always assumes the mcount public symbol has a single leading underscore
+    for our target.  See gcc/config/i386.h; it isn't overridden in
+    config/i386/cygming.h or any other places for mingw.  This is the entry
+@@ -113,3 +124,4 @@ __fentry__:
+ 	leave
+ 	ret
+ #endif
++#endif
+diff --git a/mingw-w64-crt/profile/profil.c b/mingw-w64-crt/profile/profil.c
+index 6fed2e92..e643588b 100644
+--- a/mingw-w64-crt/profile/profil.c
++++ b/mingw-w64-crt/profile/profil.c
+@@ -40,7 +40,9 @@ get_thrpc (HANDLE thr)
+   res = SuspendThread (thr);
+   if (res == -1)
+     return (size_t) - 1;
++#ifndef __powerpc__
+   ctx.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
++#endif
+   pc = (size_t) - 1;
+   if (GetThreadContext (thr, &ctx)) {
+ #if defined(_AMD64_) || defined(__x86_64__)
+diff --git a/mingw-w64-crt/profile/profil.h b/mingw-w64-crt/profile/profil.h
+index f33591d0..b2e75dd6 100644
+--- a/mingw-w64-crt/profile/profil.h
++++ b/mingw-w64-crt/profile/profil.h
+@@ -13,6 +13,8 @@ details. */
+  * The differences should be within __MINGW32__ guard.
+  */
+ 
++#include <profile.h>
++
+ /* profiling frequency.  (No larger than 1000) */
+ #define PROF_HZ			100
+ 
+diff --git a/mingw-w64-crt/stdio/mingw_vfscanf.c b/mingw-w64-crt/stdio/mingw_vfscanf.c
+index 4bd9e91c..f5b605d3 100644
+--- a/mingw-w64-crt/stdio/mingw_vfscanf.c
++++ b/mingw-w64-crt/stdio/mingw_vfscanf.c
+@@ -323,7 +323,11 @@ __mingw_sformat (_IFP *s, const char *format, va_list argp)
+     long l;
+   } cv_val;
+ 
++#ifdef __powerpc__
++  memcpy(&arg, &argp, sizeof(arg));
++#else
+   arg = argp;
++#endif
+ 
+   if (!s || s->fp == NULL || !format)
+     {
+diff --git a/mingw-w64-crt/stdio/mingw_wvfscanf.c b/mingw-w64-crt/stdio/mingw_wvfscanf.c
+index 045aba79..676f7d94 100644
+--- a/mingw-w64-crt/stdio/mingw_wvfscanf.c
++++ b/mingw-w64-crt/stdio/mingw_wvfscanf.c
+@@ -326,7 +326,11 @@ __mingw_swformat (_IFP *s, const wchar_t *format, va_list argp)
+     long l;
+   } cv_val;
+ 
++#ifdef __powerpc__
++  memcpy(&arg, &argp, sizeof(arg));
++#else
+   arg = argp;
++#endif
+ 
+   if (!s || s->fp == NULL || !format)
+     {
+diff --git a/mingw-w64-crt/stdio/vfscanf.c b/mingw-w64-crt/stdio/vfscanf.c
+index 0756045b..176558aa 100644
+--- a/mingw-w64-crt/stdio/vfscanf.c
++++ b/mingw-w64-crt/stdio/vfscanf.c
+@@ -65,6 +65,8 @@ int __ms_vfscanf (FILE * __restrict__ stream, const char * __restrict__ format,
+   ret = __ms_vfscanf_internal (stream, format, arg, fscanf);
+ #elif defined (_ARM_) || defined (__arm__)
+   ret = __ms_vfscanf_internal (stream, format, arg);
++#elif defined (__powerpc__)
++  ret = __ms_vfscanf_internal (stream, format, arg);
+ #else
+ #error "unknown platform"
+ #endif
+diff --git a/mingw-w64-crt/stdio/vfscanf2.S b/mingw-w64-crt/stdio/vfscanf2.S
+index 97807a9d..2412afd5 100644
+--- a/mingw-w64-crt/stdio/vfscanf2.S
++++ b/mingw-w64-crt/stdio/vfscanf2.S
+@@ -14,8 +14,10 @@
+ #endif
+ 	.text
+         .p2align 4,,15
+-        .globl  FCT
++  .globl  FCT
++#ifndef __powerpc__
+         .def    FCT;    .scl    2;      .type   32;     .endef
++#endif
+ #ifdef _WIN64
+         .seh_proc       FCT
+ #endif
+@@ -28,8 +30,12 @@ FCT:
+ #elif defined(_ARM_) || defined(__arm__)
+         .thumb_func
+         b       FWD
++#elif defined(__powerpc__)
++        b       FWD
+ #endif
+ #ifdef _WIN64
+         .seh_endproc
+ #endif
++#ifndef __powerpc__
+ 	.def    FWD;  .scl    2;      .type   32;     .endef
++#endif
+diff --git a/mingw-w64-crt/stdio/vfwscanf.c b/mingw-w64-crt/stdio/vfwscanf.c
+index dcf03732..e88ab5ba 100644
+--- a/mingw-w64-crt/stdio/vfwscanf.c
++++ b/mingw-w64-crt/stdio/vfwscanf.c
+@@ -64,7 +64,7 @@ int __ms_vfwscanf (FILE * __restrict__ stream,
+ #if defined(_AMD64_) || defined(__x86_64__) || \
+   defined(_X86_) || defined(__i386__)
+   ret = __ms_vfwscanf_internal (stream, format, arg, fwscanf);
+-#elif defined (_ARM_) || defined (__arm__)
++#elif defined (_ARM_) || defined (__arm__) || defined(__powerpc__)
+   ret = __ms_vfwscanf_internal (stream, format, arg);
+ #else
+ #error "unknown platform"
+diff --git a/mingw-w64-crt/stdio/vfwscanf2.S b/mingw-w64-crt/stdio/vfwscanf2.S
+index 77668d8c..9bfe62c7 100644
+--- a/mingw-w64-crt/stdio/vfwscanf2.S
++++ b/mingw-w64-crt/stdio/vfwscanf2.S
+@@ -14,8 +14,10 @@
+ #endif
+ 	.text
+         .p2align 4,,15
+-        .globl  FCT
++  .globl  FCT
++#ifndef __powerpc__
+         .def    FCT;    .scl    2;      .type   32;     .endef
++#endif
+ #ifdef _WIN64
+         .seh_proc       FCT
+ #endif
+@@ -28,8 +30,12 @@ FCT:
+ #elif defined(_ARM_) || defined(__arm__)
+         .thumb_func
+         b       FWD
++#elif defined(__powerpc__)
++        b       FWD
+ #endif
+ #ifdef _WIN64
+         .seh_endproc
+ #endif
++#ifndef __powerpc__
+ 	.def    FWD;  .scl    2;      .type   32;     .endef
++#endif
+diff --git a/mingw-w64-crt/stdio/vscanf2.S b/mingw-w64-crt/stdio/vscanf2.S
+index 9bb4b252..3f1feeb7 100644
+--- a/mingw-w64-crt/stdio/vscanf2.S
++++ b/mingw-w64-crt/stdio/vscanf2.S
+@@ -15,7 +15,9 @@
+ 	.text
+         .p2align 4,,15
+         .globl  FCT
+-        .def    FCT;    .scl    2;      .type   32;     .endef
++#ifndef __powerpc__
++  .def    FCT;    .scl    2;      .type   32;     .endef
++#endif
+ #ifdef _WIN64
+         .seh_proc       FCT
+ #endif
+@@ -28,8 +30,12 @@ FCT:
+ #elif defined(_ARM_) || defined(__arm__)
+         .thumb_func
+         b       FWD
++#elif defined(__powerpc__)
++        b       FWD
+ #endif
+ #ifdef _WIN64
+         .seh_endproc
+ #endif
++#ifndef __powerpc__
+ 	.def    FWD;  .scl    2;      .type   32;     .endef
++#endif
+diff --git a/mingw-w64-crt/stdio/vsscanf.c b/mingw-w64-crt/stdio/vsscanf.c
+index f837f2c3..c01c40be 100644
+--- a/mingw-w64-crt/stdio/vsscanf.c
++++ b/mingw-w64-crt/stdio/vsscanf.c
+@@ -66,6 +66,8 @@ int __ms_vsscanf (const char * __restrict__ s,
+   ret = __ms_vsscanf_internal (s, format, arg, sscanf);
+ #elif defined (_ARM_) || defined (__arm__)
+   ret = __ms_vsscanf_internal (s, format, arg);
++#elif defined (__powerpc__)
++  ret = __ms_vsscanf_internal (s, format, arg);
+ #else
+ #error "unknown platform"
+ #endif
+diff --git a/mingw-w64-crt/stdio/vsscanf2.S b/mingw-w64-crt/stdio/vsscanf2.S
+index 6a008d46..0e9270bd 100644
+--- a/mingw-w64-crt/stdio/vsscanf2.S
++++ b/mingw-w64-crt/stdio/vsscanf2.S
+@@ -15,7 +15,9 @@
+ 	.text
+         .p2align 4,,15
+         .globl  FCT
++#ifndef __powerpc__
+         .def    FCT;    .scl    2;      .type   32;     .endef
++#endif
+ #ifdef _WIN64
+         .seh_proc       FCT
+ #endif
+@@ -28,8 +30,12 @@ FCT:
+ #elif defined(_ARM_) || defined(__arm__)
+         .thumb_func
+         b       FWD
++#elif defined(__powerpc__)
++        b       FWD
+ #endif
+ #ifdef _WIN64
+         .seh_endproc
+ #endif
++#ifndef __powerpc__
+ 	.def    FWD;  .scl    2;      .type   32;     .endef
++#endif
+diff --git a/mingw-w64-crt/stdio/vswscanf.c b/mingw-w64-crt/stdio/vswscanf.c
+index 3bda97cb..3052495c 100644
+--- a/mingw-w64-crt/stdio/vswscanf.c
++++ b/mingw-w64-crt/stdio/vswscanf.c
+@@ -66,6 +66,8 @@ int __ms_vswscanf(const wchar_t * __restrict__ s, const wchar_t * __restrict__ f
+   ret = __ms_vswscanf_internal (s, format, arg, swscanf);
+ #elif defined (_ARM_) || defined (__arm__)
+   ret = __ms_vswscanf_internal (s, format, arg);
++#elif defined (__powerpc__)
++  ret = __ms_vswscanf_internal (s, format, arg);
+ #else
+ #error "unknown platform"
+ #endif
+diff --git a/mingw-w64-crt/stdio/vswscanf2.S b/mingw-w64-crt/stdio/vswscanf2.S
+index 52a4a3ff..fabdff8e 100644
+--- a/mingw-w64-crt/stdio/vswscanf2.S
++++ b/mingw-w64-crt/stdio/vswscanf2.S
+@@ -15,7 +15,9 @@
+ 	.text
+         .p2align 4,,15
+         .globl  FCT
++#ifndef __powerpc__
+         .def    FCT;    .scl    2;      .type   32;     .endef
++#endif
+ #ifdef _WIN64
+         .seh_proc       FCT
+ #endif
+@@ -28,8 +30,12 @@ FCT:
+ #elif defined(_ARM_) || defined(__arm__)
+         .thumb_func
+         b       FWD
++#elif defined(__powerpc__)
++        b       FWD
+ #endif
+ #ifdef _WIN64
+         .seh_endproc
+ #endif
++#ifndef __powerpc__
+ 	.def    FWD;  .scl    2;      .type   32;     .endef
++#endif
+diff --git a/mingw-w64-crt/stdio/vwscanf2.S b/mingw-w64-crt/stdio/vwscanf2.S
+index cda833ab..1101cc27 100644
+--- a/mingw-w64-crt/stdio/vwscanf2.S
++++ b/mingw-w64-crt/stdio/vwscanf2.S
+@@ -14,8 +14,10 @@
+ #endif
+ 	.text
+         .p2align 4,,15
+-        .globl  FCT
++  .globl  FCT
++#ifndef __powerpc__
+         .def    FCT;    .scl    2;      .type   32;     .endef
++#endif
+ #ifdef _WIN64
+         .seh_proc       FCT
+ #endif
+@@ -28,8 +30,12 @@ FCT:
+ #elif defined(_ARM_) || defined(__arm__)
+         .thumb_func
+         b       FWD
++#elif defined(__powerpc__)
++        b       FWD
+ #endif
+ #ifdef _WIN64
+         .seh_endproc
+ #endif
++#ifndef __powerpc__
+ 	.def    FWD;  .scl    2;      .type   32;     .endef
++#endif
 diff --git a/mingw-w64-headers/crt/_mingw.h.in b/mingw-w64-headers/crt/_mingw.h.in
-index 2742b115..0d82b757 100644
+index 2742b115..e371b427 100644
 --- a/mingw-w64-headers/crt/_mingw.h.in
 +++ b/mingw-w64-headers/crt/_mingw.h.in
 @@ -4,6 +4,8 @@
@@ -70,7 +2391,28 @@ index 2742b115..0d82b757 100644
  #ifndef _INC__MINGW_H
  #define _INC__MINGW_H
  
-@@ -567,3 +569,9 @@ const char *__mingw_get_crt_info (void);
+@@ -260,7 +262,7 @@ typedef int __int128 __attribute__ ((__mode__ (TI)));
+ #endif /* __cplusplus */
+ #endif /* __GNUC__ */
+ 
+-#if !defined(_WIN32) && !defined(__CYGWIN__)
++#if !defined(_WIN32) && !defined(__CYGWIN__) && !defined(__powerpc__)
+ #error Only Win32 target is supported!
+ #endif
+ 
+@@ -539,7 +541,11 @@ extern "C" {
+ void __cdecl __debugbreak(void);
+ __MINGW_INTRIN_INLINE void __cdecl __debugbreak(void)
+ {
++#ifdef _PPC_
++  __asm__ __volatile__("twi 31,0,0");
++#else
+   __asm__ __volatile__("int {$}3":);
++#endif
+ }
+ #endif
+ #endif
+@@ -567,3 +573,9 @@ const char *__mingw_get_crt_info (void);
  #endif
  
  #endif /* MINGW_SDK_INIT */
@@ -81,7 +2423,7 @@ index 2742b115..0d82b757 100644
 +
 +#endif /* linux */
 diff --git a/mingw-w64-headers/crt/_mingw_stdarg.h b/mingw-w64-headers/crt/_mingw_stdarg.h
-index ab9533d5..161d640f 100644
+index ab9533d5..33b10354 100644
 --- a/mingw-w64-headers/crt/_mingw_stdarg.h
 +++ b/mingw-w64-headers/crt/_mingw_stdarg.h
 @@ -7,11 +7,13 @@
@@ -89,7 +2431,7 @@ index ab9533d5..161d640f 100644
  #define _INC_STDARG
  
 -#ifndef _WIN32
-+#if !defined(_WIN32) && !defined(linux)
++#if !defined(_WIN32) && !defined(linux) && !defined(__powerpc__)
  #error Only Win32 target is supported!
  #endif
  
@@ -128,6 +2470,22 @@ index 7ceaaf16..936adc46 100644
  #endif
  
  #define GetExceptionCode _exception_code
+diff --git a/mingw-w64-headers/crt/intrin.h b/mingw-w64-headers/crt/intrin.h
+index 0b2343fb..0fe8a814 100644
+--- a/mingw-w64-headers/crt/intrin.h
++++ b/mingw-w64-headers/crt/intrin.h
+@@ -1050,7 +1050,11 @@ extern "C" {
+     /* __MACHINEI(__MINGW_EXTENSION unsigned __int64 __readmsr(unsigned __LONG32)) moved to psdk_inc/intrin-impl.h */
+     /* __MACHINEI(__MINGW_EXTENSION void __writemsr(unsigned __LONG32,unsigned __int64)) moved to psdk_inc/intrin-impl.h */
+ #ifndef __GNUC__
++    #ifdef _MPPC_
++    __MINGW_EXTENSION unsigned __int64 __rdtsc(void);
++    #else
+     __MACHINEIW64(__MINGW_EXTENSION unsigned __int64 __rdtsc(void))
++    #endif
+ #endif
+     /* __MACHINEI(void __movsb(unsigned char *,unsigned char const *,size_t)) moved to psdk_inc/intrin-impl.h */
+     /* __MACHINEI(void __movsw(unsigned short *,unsigned short const *,size_t)) moved to psdk_inc/intrin-impl.h */
 diff --git a/mingw-w64-headers/crt/linhack.h b/mingw-w64-headers/crt/linhack.h
 new file mode 100644
 index 00000000..c76d6e95
@@ -166,19 +2524,85 @@ index b4c9dc48..7df5a73c 100644
  #define _ALLOCA_S_MARKER_SIZE 8
  #elif defined(__ia64__) || defined(__x86_64)
  #define _ALLOCA_S_MARKER_SIZE 16
+diff --git a/mingw-w64-headers/crt/ppchack.h b/mingw-w64-headers/crt/ppchack.h
+new file mode 100644
+index 00000000..9969db09
+--- /dev/null
++++ b/mingw-w64-headers/crt/ppchack.h
+@@ -0,0 +1,4 @@
++#ifndef MINGW_PPC
++#define MINGW_PPC
++
++#endif /* MINGW_PPC */
+diff --git a/mingw-w64-headers/crt/profile.h b/mingw-w64-headers/crt/profile.h
+index 96f5c2f4..bb2a34cb 100644
+--- a/mingw-w64-headers/crt/profile.h
++++ b/mingw-w64-headers/crt/profile.h
+@@ -45,8 +45,18 @@
+ #define _MCOUNT_CALL
+ #endif
+ 
++#ifdef __powerpc__
++typedef unsigned char u_char;
++typedef unsigned short u_short;
++typedef unsigned int u_int;
++#endif
++
++#ifdef __powerpc__
++#define _MCOUNT_DECL inline void _MCOUNT_CALL _mcount_private
++#else
+ #define _MCOUNT_DECL __attribute__((gnu_inline)) __inline__ \
+-   void _MCOUNT_CALL _mcount_private
++  void _MCOUNT_CALL _mcount_private
++#endif
+ 
+ /* gcc always assumes the mcount public symbol has a single leading underscore
+    for our target.  See gcc/config/i386.h; it isn't overridden in
 diff --git a/mingw-w64-headers/crt/setjmp.h b/mingw-w64-headers/crt/setjmp.h
-index 5be566da..42ae29f7 100644
+index 5be566da..917b89ad 100644
 --- a/mingw-w64-headers/crt/setjmp.h
 +++ b/mingw-w64-headers/crt/setjmp.h
-@@ -141,7 +141,7 @@ extern "C" {
-     SETJMP_FLOAT128 Xmm15;
+@@ -162,6 +162,27 @@ extern "C" {
+     unsigned long long D[8];
    } _JUMP_BUFFER;
  
--#elif defined(_ARM_)
-+#elif defined(_ARM_) || defined(__powerpc__)
++#elif defined(__powerpc__)
++
++#define _JBLEN 23
++#define _JBTYPE long
++
++  typedef struct __JUMP_BUFFER {
++    unsigned long Frame;
++    unsigned long R4;
++    unsigned long R5;
++    unsigned long R6;
++    unsigned long R7;
++    unsigned long R8;
++    unsigned long R9;
++    unsigned long R10;
++    unsigned long R11;
++    unsigned long Sp;
++    unsigned long Pc;
++    unsigned long Fpscr;
++    unsigned long long D[8];
++  } _JUMP_BUFFER;
++
+ #endif
  
- #define _JBLEN 28
- #define _JBTYPE int
+ #ifndef _JMP_BUF_DEFINED
+diff --git a/mingw-w64-headers/crt/share.h b/mingw-w64-headers/crt/share.h
+index be6d8192..c35f2c37 100644
+--- a/mingw-w64-headers/crt/share.h
++++ b/mingw-w64-headers/crt/share.h
+@@ -6,7 +6,7 @@
+ #ifndef _INC_SHARE
+ #define _INC_SHARE
+ 
+-#ifndef _WIN32
++#if !defined(_WIN32) && !defined(__powerpc__)
+ #error Only Win32 target is supported!
+ #endif
+ 
 diff --git a/mingw-w64-headers/crt/stdarg.h b/mingw-w64-headers/crt/stdarg.h
 index 2ff5000a..d0318c37 100644
 --- a/mingw-w64-headers/crt/stdarg.h
@@ -310,6 +2734,228 @@ index 765eca92..d8349608 100644
  
  #ifndef _CRT_PERROR_DEFINED
  #define _CRT_PERROR_DEFINED
+diff --git a/mingw-w64-headers/crt/sys/stat.h b/mingw-w64-headers/crt/sys/stat.h
+index ed602190..553a2761 100644
+--- a/mingw-w64-headers/crt/sys/stat.h
++++ b/mingw-w64-headers/crt/sys/stat.h
+@@ -6,7 +6,7 @@
+ #ifndef _INC_STAT
+ #define _INC_STAT
+ 
+-#ifndef _WIN32
++#if !defined(_WIN32) && !defined(__powerpc__)
+ #error Only Win32 target is supported!
+ #endif
+ 
+diff --git a/mingw-w64-headers/crt/sys/timeb.h b/mingw-w64-headers/crt/sys/timeb.h
+index c92c8e01..18681b2a 100644
+--- a/mingw-w64-headers/crt/sys/timeb.h
++++ b/mingw-w64-headers/crt/sys/timeb.h
+@@ -8,7 +8,7 @@
+ 
+ #include <crtdefs.h>
+ 
+-#ifndef _WIN32
++#if !defined(_WIN32) && !defined(__powerpc__)
+ #error Only Win32 target is supported!
+ #endif
+ 
+diff --git a/mingw-w64-headers/crt/sys/types.h b/mingw-w64-headers/crt/sys/types.h
+index bc0a54fc..7417c912 100644
+--- a/mingw-w64-headers/crt/sys/types.h
++++ b/mingw-w64-headers/crt/sys/types.h
+@@ -6,7 +6,7 @@
+ #ifndef _INC_TYPES
+ #define _INC_TYPES
+ 
+-#ifndef _WIN32
++#if !defined(_WIN32) && !defined(__powerpc__)
+ #error Only Win32 target is supported!
+ #endif
+ 
+diff --git a/mingw-w64-headers/crt/time.h b/mingw-w64-headers/crt/time.h
+index 7f5bbb78..7236ed6a 100644
+--- a/mingw-w64-headers/crt/time.h
++++ b/mingw-w64-headers/crt/time.h
+@@ -8,7 +8,7 @@
+ 
+ #include <crtdefs.h>
+ 
+-#ifndef _WIN32
++#if !defined(_WIN32) && !defined(__powerpc__)
+ #error Only Win32 target is supported!
+ #endif
+ 
+diff --git a/mingw-w64-headers/crt/wctype.h b/mingw-w64-headers/crt/wctype.h
+index 84180ed6..44983c7c 100644
+--- a/mingw-w64-headers/crt/wctype.h
++++ b/mingw-w64-headers/crt/wctype.h
+@@ -6,7 +6,7 @@
+ #ifndef _INC_WCTYPE
+ #define _INC_WCTYPE
+ 
+-#ifndef _WIN32
++#if !defined(_WIN32) && !defined(__powerpc__)
+ #error Only Win32 target is supported!
+ #endif
+ 
+diff --git a/mingw-w64-headers/ddk/include/ddk/ntddk.h b/mingw-w64-headers/ddk/include/ddk/ntddk.h
+index 6f5259d4..34043d9e 100644
+--- a/mingw-w64-headers/ddk/include/ddk/ntddk.h
++++ b/mingw-w64-headers/ddk/include/ddk/ntddk.h
+@@ -3009,6 +3009,7 @@ typedef enum _WELL_KNOWN_SID_TYPE {
+ 
+ #endif /* !defined(RC_INVOKED) */
+ 
++#ifdef _X86_
+ typedef struct _FLOATING_SAVE_AREA {
+   ULONG ControlWord;
+   ULONG StatusWord;
+@@ -3050,6 +3051,103 @@ typedef struct _CONTEXT {
+   UCHAR ExtendedRegisters[MAXIMUM_SUPPORTED_EXTENSION];
+ } CONTEXT;
+ #include "poppack.h"
++#elif defined(_PPC_)
++
++#define CONTEXT_CONTROL 1L
++#define CONTEXT_FLOATING_POINT  2L
++#define CONTEXT_INTEGER 4L
++#define CONTEXT_DEBUG_REGISTERS 8L
++#define CONTEXT_FULL (CONTEXT_CONTROL|CONTEXT_FLOATING_POINT|CONTEXT_INTEGER)
++  typedef struct _FLOATING_SAVE_AREA
++  {
++    double Fpr0;
++    double Fpr1;
++    double Fpr2;
++    double Fpr3;
++    double Fpr4;
++    double Fpr5;
++    double Fpr6;
++    double Fpr7;
++    double Fpr8;
++    double Fpr9;
++    double Fpr10;
++    double Fpr11;
++    double Fpr12;
++    double Fpr13;
++    double Fpr14;
++    double Fpr15;
++    double Fpr16;
++    double Fpr17;
++    double Fpr18;
++    double Fpr19;
++    double Fpr20;
++    double Fpr21;
++    double Fpr22;
++    double Fpr23;
++    double Fpr24;
++    double Fpr25;
++    double Fpr26;
++    double Fpr27;
++    double Fpr28;
++    double Fpr29;
++    double Fpr30;
++    double Fpr31;
++    double Fpscr;
++  } FLOATING_SAVE_AREA;
++
++  typedef struct _CONTEXT {
++    FLOATING_SAVE_AREA FloatSave;
++    DWORD Gpr0;
++    DWORD Gpr1;
++    DWORD Gpr2;
++    DWORD Gpr3;
++    DWORD Gpr4;
++    DWORD Gpr5;
++    DWORD Gpr6;
++    DWORD Gpr7;
++    DWORD Gpr8;
++    DWORD Gpr9;
++    DWORD Gpr10;
++    DWORD Gpr11;
++    DWORD Gpr12;
++    DWORD Gpr13;
++    DWORD Gpr14;
++    DWORD Gpr15;
++    DWORD Gpr16;
++    DWORD Gpr17;
++    DWORD Gpr18;
++    DWORD Gpr19;
++    DWORD Gpr20;
++    DWORD Gpr21;
++    DWORD Gpr22;
++    DWORD Gpr23;
++    DWORD Gpr24;
++    DWORD Gpr25;
++    DWORD Gpr26;
++    DWORD Gpr27;
++    DWORD Gpr28;
++    DWORD Gpr29;
++    DWORD Gpr30;
++    DWORD Gpr31;
++    DWORD Cr;
++    DWORD Xer;
++    DWORD Msr;
++    DWORD Iar;
++    DWORD Lr;
++    DWORD Ctr;
++    DWORD ContextFlags;
++    DWORD Fill[3];
++    DWORD Dr0;
++    DWORD Dr1;
++    DWORD Dr2;
++    DWORD Dr3;
++    DWORD Dr4;
++    DWORD Dr5;
++    DWORD Dr6;
++    DWORD Dr7;
++  } CONTEXT;
++
++#endif
+ 
+ #define KeGetPcr()                      PCR
+ 
+diff --git a/mingw-w64-headers/direct-x/include/d3d10_1.h b/mingw-w64-headers/direct-x/include/d3d10_1.h
+index 6c2884a5..75381925 100644
+--- a/mingw-w64-headers/direct-x/include/d3d10_1.h
++++ b/mingw-w64-headers/direct-x/include/d3d10_1.h
+@@ -86,6 +86,8 @@ extern "C" {
+ #define D3D10_1_FLOAT16_FUSED_TOLERANCE_IN_ULP      (0.6)
+ #define D3D10_1_FLOAT32_TO_INTEGER_TOLERANCE_IN_ULP (0.6f)
+ #include <d3d10_1shader.h>
++#ifndef __MINGW_D3D10_FEATURE
++#define __MINGW_D3D10_FEATURE
+ typedef enum D3D10_FEATURE_LEVEL1 {
+     D3D10_FEATURE_LEVEL_10_0 = 0xa000,
+     D3D10_FEATURE_LEVEL_10_1 = 0xa100,
+@@ -93,6 +95,7 @@ typedef enum D3D10_FEATURE_LEVEL1 {
+     D3D10_FEATURE_LEVEL_9_2 = 0x9200,
+     D3D10_FEATURE_LEVEL_9_3 = 0x9300
+ } D3D10_FEATURE_LEVEL1;
++#endif
+ typedef struct D3D10_RENDER_TARGET_BLEND_DESC1 {
+     WINBOOL BlendEnable;
+     D3D10_BLEND SrcBlend;
+diff --git a/mingw-w64-headers/direct-x/include/dxgiformat.h b/mingw-w64-headers/direct-x/include/dxgiformat.h
+index 6bb9d006..08e6a3e9 100644
+--- a/mingw-w64-headers/direct-x/include/dxgiformat.h
++++ b/mingw-w64-headers/direct-x/include/dxgiformat.h
+@@ -21,6 +21,8 @@
+ 
+ #define DXGI_FORMAT_DEFINED 1
+ 
++#ifndef __MINGW_DXGI_FORMAT
++#define __MINGW_DXGI_FORMAT
+ typedef enum DXGI_FORMAT {
+     DXGI_FORMAT_UNKNOWN                 = 0,
+     DXGI_FORMAT_R32G32B32A32_TYPELESS   = 1,
+@@ -140,5 +142,6 @@ typedef enum DXGI_FORMAT {
+     DXGI_FORMAT_B4G4R4A4_UNORM          = 115,
+     DXGI_FORMAT_FORCE_UINT              = 0xffffffff
+ } DXGI_FORMAT;
++#endif
+ 
+ #endif
 diff --git a/mingw-w64-headers/include/combaseapi.h b/mingw-w64-headers/include/combaseapi.h
 index ca6483f9..21951c81 100644
 --- a/mingw-w64-headers/include/combaseapi.h
@@ -340,6 +2986,38 @@ index ca6483f9..21951c81 100644
  
  WINOLEAPI PropVariantCopy (PROPVARIANT *pvarDest, const PROPVARIANT *pvarSrc);
  WINOLEAPI PropVariantClear (PROPVARIANT *pvar);
+diff --git a/mingw-w64-headers/include/d2d1.h b/mingw-w64-headers/include/d2d1.h
+index bc457850..19978010 100644
+--- a/mingw-w64-headers/include/d2d1.h
++++ b/mingw-w64-headers/include/d2d1.h
+@@ -51,6 +51,8 @@ typedef struct DWRITE_GLYPH_RUN DWRITE_GLYPH_RUN;
+ /* enumerations */
+ 
+ #ifndef __MINGW_HAS_DXSDK
++#ifndef __MINGW_D3D10_FEATURE
++#define __MINGW_D3D10_FEATURE
+ typedef enum D3D10_FEATURE_LEVEL1 {
+   D3D10_FEATURE_LEVEL_10_0   = 0xa000,
+   D3D10_FEATURE_LEVEL_10_1   = 0xa100,
+@@ -58,7 +60,10 @@ typedef enum D3D10_FEATURE_LEVEL1 {
+   D3D10_FEATURE_LEVEL_9_2    = 0x9200,
+   D3D10_FEATURE_LEVEL_9_3    = 0x9300 
+ } D3D10_FEATURE_LEVEL1;
++#endif
+ 
++#ifndef __MINGW_DXGI_FORMAT
++#define __MINGW_DXGI_FORMAT
+ typedef enum DXGI_FORMAT {
+   DXGI_FORMAT_UNKNOWN                      = 0,
+   DXGI_FORMAT_R32G32B32A32_TYPELESS        = 1,
+@@ -162,6 +167,7 @@ typedef enum DXGI_FORMAT {
+   DXGI_FORMAT_BC7_UNORM_SRGB               = 99,
+   DXGI_FORMAT_FORCE_UINT                   = 0xffffffff
+ } DXGI_FORMAT, *LPDXGI_FORMAT;
++#endif
+ 
+ #endif /*__MINGW_HAS_DXSDK*/
+ 
 diff --git a/mingw-w64-headers/include/interlockedapi.h b/mingw-w64-headers/include/interlockedapi.h
 index 49f5cd79..8ce78a47 100755
 --- a/mingw-w64-headers/include/interlockedapi.h
