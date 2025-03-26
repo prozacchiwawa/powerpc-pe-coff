@@ -35,6 +35,8 @@ int ElfPeHeader::computeSize() const
 
 void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sectionRvaSet, uint32_t imageSize)
 {
+    auto codeLocation = getTextInfo(sectionRvaSet);
+
     data[0] = 'M'; data[1] = 'Z';
     uint8_t *dataptr = &data[0x3c];
     uint32_t coffHeaderSize, optHeaderSizeMember;
@@ -52,12 +54,12 @@ void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sect
     coffHeaderSize = dataptr - &data[0];
     le16write_postinc(dataptr, 0x10b);
     le16write_postinc(dataptr, 0x100);
-    le32write_postinc(dataptr, 0);
-    le32write_postinc(dataptr, 0);
-    le32write_postinc(dataptr, 0);
+    le32write_postinc(dataptr, codeLocation.second); // Size of code
+    le32write_postinc(dataptr, 0); // Size of data
+    le32write_postinc(dataptr, 0); // Size of bss
     le32write_postinc(dataptr, getEntryPoint(sectionRvaSet, imagebase, entry));
-    le32write_postinc(dataptr, 0);
-    le32write_postinc(dataptr, 0);
+    le32write_postinc(dataptr, codeLocation.first); // Base of code
+    le32write_postinc(dataptr, 0); // Base of data
     le32write_postinc(dataptr, imagebase);
     le32write_postinc(dataptr, sectionalign);
     le32write_postinc(dataptr, filealign);
@@ -194,6 +196,11 @@ u32pair_t getNamedSectionInfo(ElfObjectFile *eof, const std::vector<section_mapp
 	    }
     }
     return std::make_pair(0,0);
+}
+
+u32pair_t ElfPeHeader::getTextInfo(const std::vector<section_mapping_t> &mapping) const
+{
+    return getNamedSectionInfo(eof, mapping, ".text");
 }
 
 u32pair_t ElfPeHeader::getExportInfo(const std::vector<section_mapping_t> &mapping) const

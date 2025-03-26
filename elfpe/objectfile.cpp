@@ -171,7 +171,7 @@ void ElfObjectFile::removeSection(const std::string &name)
 const ElfObjectFile::Section *ElfObjectFile::getNamedSection(const std::string &name) const
 {
     std::map<std::string, const ElfObjectFile::Section *>::const_iterator i =
-	sections_by_name.find(name);
+        sections_by_name.find(name);
     if(i != sections_by_name.end())
 	return i->second;
     else return NULL;
