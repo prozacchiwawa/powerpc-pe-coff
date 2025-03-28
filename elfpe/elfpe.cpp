@@ -10,6 +10,7 @@
 #include <vector>
 #include <sstream>
 #include <algorithm>
+#include <fstream>
 #include "objectfile.h"
 #include "header.h"
 #include "argparse.h"
@@ -26,6 +27,14 @@ int execute_command( bool verbose, const std::vector<std::string> &args )
 	std::vector<const char *> argvect;
 	pid_t pid;
 	int status = 1;
+
+  if (verbose) {
+      std::ostringstream oss;
+      for (auto arg = args.begin(); arg != args.end(); arg++) {
+          oss << " \"" << *arg << "\"";
+      }
+      fprintf(stderr, "exec %s\n", oss.str().c_str());
+  }
 
 	for( size_t i = 0; i < args.size(); i++ )
 	{
@@ -105,6 +114,50 @@ ProcessRelocSections
     return relocData;
 }
 
+std::pair<std::string, std::string> MakeEntryPointObjectFile
+(bool verbose,
+ const std::string &installdir,
+ const std::string &code_ep)
+{
+    auto pid = getpid();
+    auto tmp_env = getenv("TMP");
+    auto tmpdir = std::string(tmp_env ? tmp_env : ".");
+    std::ostringstream tmpfile;
+    tmpfile << tmpdir << "/" << "entrypoint_" << pid << ".s";
+    std::ostringstream objfile;
+    objfile << tmpdir << "/" << "entrypoint_" << pid << ".o";
+    std::ostringstream entry_sym;
+    entry_sym << "_entry_desc_" << pid;
+
+    {
+        auto tmp_s = std::ofstream(tmpfile.str().c_str());
+        tmp_s << "  .text\n";
+        tmp_s << "  .globl " << code_ep << "\n";
+        tmp_s << "  .globl " << entry_sym.str() << "\n";
+        tmp_s << entry_sym.str() << ":\n";
+        // Second entry? should point to toc in future.  Might be possible
+        tmp_s << "  .long " << code_ep << "\n";
+        for (auto i = 0; i < 4; i++) {
+            tmp_s << "  .long 0\n";
+        }
+    }
+
+    std::vector<std::string> run_compile;
+    std::string compiler = installdir + "/bin/powerpcle-unknown-elf-as";
+    run_compile.push_back(compiler);
+    run_compile.push_back("-mlittle");
+    run_compile.push_back("-o");
+    run_compile.push_back(objfile.str());
+    run_compile.push_back(tmpfile.str());
+
+    if (execute_command(verbose, run_compile) != 0) {
+        fprintf(stderr, "failed to create entry point struct\n");
+        exit(1);
+    }
+
+    return std::make_pair(objfile.str(), entry_sym.str());
+}
+
 int main( int argc, char **argv ) {
     bool verbose = false, nostdlib = false,
 	nostartfiles = false, compile_only = false, is_dll = false, entry,
@@ -112,7 +165,7 @@ int main( int argc, char **argv ) {
     int status = 0;
     std::string gcc_name, gcc_hash_output, gcc_line,
         mingw_lib_dir, output_file, entry_point = "",
-        image_base = "0x400000",
+        image_base = "0x02000000",
         section_align = "0x1000", file_align = "0x1000", subsystem = "cui",
         result;
     std::vector<std::string> gcc_args_str;
@@ -154,11 +207,19 @@ int main( int argc, char **argv ) {
         {
             entry_point = entry_point.substr(0, at);
         }
-        if( !compile_only )
-        {
-            gcc_args_str.push_back(std::string("-Wl,--entry=") + entry_point);
-            gcc_args_str.push_back(std::string("-Wl,--undefined=") + entry_point);
-        }
+    } else {
+        entry_point = "_start";
+    }
+
+    if( !compile_only )
+    {
+        // Generate an object file that names the entry point and override the normal entry
+        // point.
+        auto object_file = MakeEntryPointObjectFile(verbose, installdir, entry_point);
+        entry_point = object_file.second;
+        gcc_args_str.push_back(object_file.first);
+        gcc_args_str.push_back(std::string("-Wl,--entry=") + entry_point);
+        gcc_args_str.push_back(std::string("-Wl,--undefined=") + entry_point);
     }
 
     // Nostdlib
@@ -176,6 +237,7 @@ int main( int argc, char **argv ) {
         "include",
         nullptr
     };
+
     for (auto i = 0; system_include_dir_list[i]; i++) {
         std::ostringstream oss;
         oss << installdir << "/" << system_include_dir_list[i];
@@ -221,11 +283,11 @@ int main( int argc, char **argv ) {
     gcc_args_str.insert(gcc_args_str.begin(),gcc_name);
 
     if( verbose ) {
-      fprintf( stderr, "#" );
-      for( size_t i = 0; i < gcc_args_str.size(); i++ ) {
-        fprintf( stderr, " \"%s\"", gcc_args_str[i].c_str() );
-      }
-      fprintf( stderr, "\n" );
+        fprintf( stderr, "#" );
+        for( size_t i = 0; i < gcc_args_str.size(); i++ ) {
+            fprintf( stderr, " \"%s\"", gcc_args_str[i].c_str() );
+        }
+        fprintf( stderr, "\n" );
     }
     // if (!compile_only) gcc_args_str.insert(gcc_args_str.end(), "-Wl,--end-group");
 

@@ -36,6 +36,17 @@ int ElfPeHeader::computeSize() const
 void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sectionRvaSet, uint32_t imageSize)
 {
     auto codeLocation = getTextInfo(sectionRvaSet);
+    auto dataLocation = getDataInfo(sectionRvaSet);
+
+    auto filteredSectionSet = std::vector<section_mapping_t>();
+    for (auto i = sectionRvaSet.begin(); i != sectionRvaSet.end(); i++) {
+        const ElfObjectFile::Section *section = i->section;
+        if (section->logicalSize() == 0) {
+            continue;
+        }
+
+        filteredSectionSet.push_back(*i);
+    }
 
     data[0] = 'M'; data[1] = 'Z';
     uint8_t *dataptr = &data[0x3c];
@@ -44,7 +55,7 @@ void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sect
     dataptr = &data[0x80];
     le32write_postinc(dataptr, 0x4550);
     le16write_postinc(dataptr, getPeArch());
-    le16write_postinc(dataptr, sectionRvaSet.size());
+    le16write_postinc(dataptr, filteredSectionSet.size());
     le32write_postinc(dataptr, time(NULL));
     le32write_postinc(dataptr, 0);
     le32write_postinc(dataptr, 0);
@@ -55,11 +66,11 @@ void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sect
     le16write_postinc(dataptr, 0x10b);
     le16write_postinc(dataptr, 0x100);
     le32write_postinc(dataptr, codeLocation.second); // Size of code
-    le32write_postinc(dataptr, 0); // Size of data
+    le32write_postinc(dataptr, dataLocation.second); // Size of data
     le32write_postinc(dataptr, 0); // Size of bss
     le32write_postinc(dataptr, getEntryPoint(sectionRvaSet, imagebase, entry));
     le32write_postinc(dataptr, codeLocation.first); // Base of code
-    le32write_postinc(dataptr, 0); // Base of data
+    le32write_postinc(dataptr, dataLocation.first); // Base of data
     le32write_postinc(dataptr, imagebase);
     le32write_postinc(dataptr, sectionalign);
     le32write_postinc(dataptr, filealign);
@@ -100,31 +111,31 @@ void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sect
     le32pwrite_postinc(dataptr, std::pair(0,0));
     // Fixup size of optional header
     le16write
-	(&data[0] + optHeaderSizeMember,
-	 (dataptr - &data[0]) - coffHeaderSize);
+        (&data[0] + optHeaderSizeMember,
+         (dataptr - &data[0]) - coffHeaderSize);
     // Here, we store references to the sections, filling in the RVA and
     // size, but leaving out the other info.  We write the section name
     // truncated into the name field and leave the section id in the
     // physical address bit
 
     uint32_t paddr = computeSize();
-    for (int i = 0; i < sectionRvaSet.size(); i++)
+    for (int i = 0; i < filteredSectionSet.size(); i++)
     {
-      section_mapping_t mapping = sectionRvaSet[i];
-      const ElfObjectFile::Section *section = mapping.section;
-      std::string name = section->getName();
-      uint32_t size = section->logicalSize();
-      uint32_t psize =
-        section->getType() == SHT_NOBITS ? 0 : roundup(size, filealign);
-      uint32_t rva = mapping.rva;
-      for (int j = 0; j < 8; j++)
+        section_mapping_t mapping = filteredSectionSet[i];
+        const ElfObjectFile::Section *section = mapping.section;
+        std::string name = section->getName();
+        uint32_t size = section->logicalSize();
+        uint32_t psize =
+            section->getType() == SHT_NOBITS ? 0 : roundup(size, filealign);
+        uint32_t rva = mapping.rva;
+        for (int j = 0; j < 8; j++)
         {
-          *dataptr++ = j < name.size() ? name[j] : '\000';
+            *dataptr++ = j < name.size() ? name[j] : '\000';
         }
 
 #if 0
-      printf("V %08x:%08x P %08x:%08x %s\n",
-             rva, size, paddr, psize, name.c_str());
+        printf("V %08x:%08x P %08x:%08x %s\n",
+               rva, size, paddr, psize, name.c_str());
 #endif
 
       le32write_postinc(dataptr, size);
@@ -136,15 +147,17 @@ void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sect
       le32write_postinc(dataptr, 0);
 
       if (name == ".text") {
-        le32write_postinc(dataptr, IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ);
+          le32write_postinc(dataptr, IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ);
       } else if (name == ".bss") {
-        le32write_postinc(dataptr, IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
+          le32write_postinc(dataptr, IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
       } else if (name == ".pdata") {
-        le32write_postinc(dataptr, IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ);
+          le32write_postinc(dataptr, IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ);
+      } else if (name == ".idata") {
+          le32write_postinc(dataptr, IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
       } else {
-        le32write_postinc(dataptr, IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
+          le32write_postinc(dataptr, IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE);
       }
-  paddr += psize;
+      paddr += psize;
   }
 }
 
@@ -188,12 +201,15 @@ u32pair_t getNamedSectionInfo(ElfObjectFile *eof, const std::vector<section_mapp
 
     if(sect)
     {
-	for(i = 0; i < mapping.size(); i++)
-	    if(mapping[i].index == sect->getNumber())
-	    {
-		return std::make_pair
-		    (mapping[i].rva, sect->logicalSize());
-	    }
+        for(i = 0; i < mapping.size(); i++) {
+            if(mapping[i].index == sect->getNumber())
+            {
+                if (sect->logicalSize() == 0) {
+                    break;
+                }
+                return std::make_pair(mapping[i].rva, sect->logicalSize());
+            }
+        }
     }
     return std::make_pair(0,0);
 }
@@ -201,6 +217,11 @@ u32pair_t getNamedSectionInfo(ElfObjectFile *eof, const std::vector<section_mapp
 u32pair_t ElfPeHeader::getTextInfo(const std::vector<section_mapping_t> &mapping) const
 {
     return getNamedSectionInfo(eof, mapping, ".text");
+}
+
+u32pair_t ElfPeHeader::getDataInfo(const std::vector<section_mapping_t> &mapping) const
+{
+    return getNamedSectionInfo(eof, mapping, ".data");
 }
 
 u32pair_t ElfPeHeader::getExportInfo(const std::vector<section_mapping_t> &mapping) const
@@ -260,11 +281,12 @@ uint32_t ElfPeHeader::getEntryPoint
 {
     if(entry == NULL) return computeSize();
     for(int i = 0; i < secmap.size(); i++) {
-	if(secmap[i].index == entry->section) {
-	    auto ep = secmap[i].rva - imageBase + entry->offset;
-	    fprintf(stderr, "entrypoint %08x %08x -> %08x\n", (unsigned int)secmap[i].rva, (unsigned int)entry->offset, (unsigned int)ep);
-	    return ep;
-	}
+        fprintf(stderr, "entry->section %d\n", entry->section);
+        if(secmap[i].index == entry->section) {
+            auto ep = secmap[i].rva + entry->offset;
+            fprintf(stderr, "entrypoint %08x %08x -> %08x\n", (unsigned int)secmap[i].rva, (unsigned int)entry->offset, (unsigned int)ep);
+            return ep;
+        }
     }
     return computeSize();
 }

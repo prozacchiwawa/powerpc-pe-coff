@@ -40,6 +40,7 @@ private:
     u32pair_t getImportInfo(const std::vector<section_mapping_t> &rvas) const;
     u32pair_t getResourceInfo(const std::vector<section_mapping_t> &rvas) const;
     u32pair_t getTextInfo(const std::vector<section_mapping_t> &rvas) const;
+    u32pair_t getDataInfo(const std::vector<section_mapping_t> &rvas) const;
     u32pair_t getExceptionInfo() const;
     u32pair_t getSecurityInfo() const;
     u32pair_t getRelocInfo(const std::vector<section_mapping_t> &rvas) const;

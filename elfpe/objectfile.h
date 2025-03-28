@@ -138,7 +138,11 @@ public:
     }
 
     u32pair_t getIat() const {
-        return this->iat;
+        if (this->iat.first && this->iat.second) {
+            return this->iat;
+        } else {
+            return std::make_pair(0,0);
+        }
     }
 
 private:
@@ -153,6 +157,7 @@ private:
     std::vector<Symbol*> symbols;
     std::map<std::string, const Symbol *> symbols_by_name;
     u32pair_t iat;
+    uint32_t real_entry_point;
 
     void init();
     void finalize();

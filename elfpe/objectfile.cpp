@@ -6,7 +6,8 @@
 #include "util.h"
 #include "objectfile.h"
 
-ElfObjectFile::ElfObjectFile(const std::string &filename) : fd(-1), filename(filename)
+ElfObjectFile::ElfObjectFile(const std::string &filename) :
+  fd(-1), filename(filename), real_entry_point(0)
 {
     init();
 }
