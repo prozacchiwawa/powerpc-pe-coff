@@ -160,8 +160,8 @@ std::pair<std::string, std::string> MakeEntryPointObjectFile
 
 int main( int argc, char **argv ) {
     bool verbose = false, nostdlib = false,
-	nostartfiles = false, compile_only = false, is_dll = false, entry,
-	mkheader = true;
+        nostartfiles = false, compile_only = false, is_dll = false, entry,
+        mkheader = true;
     int status = 0;
     std::string gcc_name, gcc_hash_output, gcc_line,
         mingw_lib_dir, output_file, entry_point = "",
@@ -207,8 +207,10 @@ int main( int argc, char **argv ) {
         {
             entry_point = entry_point.substr(0, at);
         }
+    } else if (subsystem == "windows") {
+        entry_point = "WinMainCRTStartup";
     } else {
-        entry_point = "_start";
+        entry_point = "mainCRTStartup";
     }
 
     if( !compile_only )
@@ -220,14 +222,17 @@ int main( int argc, char **argv ) {
         gcc_args_str.push_back(object_file.first);
         gcc_args_str.push_back(std::string("-Wl,--entry=") + entry_point);
         gcc_args_str.push_back(std::string("-Wl,--undefined=") + entry_point);
+        if (!nostartfiles) {
+            gcc_args_str.push_back(std::string(installdir) + "/lib32/crt1.o");
+        }
     }
 
     // Nostdlib
     if( !nostdlib && !compile_only ) {
         gcc_args_str.push_back(std::string("-L") + mingw_lib_dir);
-        gcc_args_str.push_back("-lcrtdll");
         gcc_args_str.push_back("-lmingw32");
         gcc_args_str.push_back("-lkernel32");
+        gcc_args_str.push_back("-lcrtdll");
     }
 
     const char *system_include_dir_list[] = {
@@ -274,12 +279,13 @@ int main( int argc, char **argv ) {
     gcc_args_str.insert(gcc_args_str.begin(), "-mlittle-endian");
     if (!compile_only)
     {
-      gcc_args_str.insert(gcc_args_str.begin(), "-Wl,-r");
-      gcc_args_str.insert(gcc_args_str.begin(), "-Wl,-EL");
-      // gcc_args_str.insert(gcc_args_str.begin(), "-Wl,--start-group");
-      gcc_args_str.insert(gcc_args_str.begin(), std::string("-Wl,-T,") + mingw_lib_dir + "/ldscript");
-      //gcc_args_str.insert(gcc_args_str.begin(), "-Wl,-shared,-Bsymbolic,-z,defs");
+        gcc_args_str.insert(gcc_args_str.begin(), "-Wl,-r");
+        gcc_args_str.insert(gcc_args_str.begin(), "-Wl,-EL");
+        // gcc_args_str.insert(gcc_args_str.begin(), "-Wl,--start-group");
+        gcc_args_str.insert(gcc_args_str.begin(), std::string("-Wl,-T,") + mingw_lib_dir + "/ldscript");
+        //gcc_args_str.insert(gcc_args_str.begin(), "-Wl,-shared,-Bsymbolic,-z,defs");
     }
+
     gcc_args_str.insert(gcc_args_str.begin(),gcc_name);
 
     if( verbose ) {
@@ -295,6 +301,14 @@ int main( int argc, char **argv ) {
     if ( !(status = execute_command( verbose, gcc_args_str )) && !compile_only && mkheader )
     {
         /* Ok fixup the elf object file */
+        if (verbose) {
+            std::vector<std::string> copy_cmd;
+            copy_cmd.push_back("/bin/cp");
+            copy_cmd.push_back(output_file);
+            copy_cmd.push_back(output_file + ".elf");
+            execute_command(verbose, copy_cmd);
+        }
+
         ElfObjectFile eof(output_file);
         if(!eof) exit(1);
 

@@ -41,7 +41,7 @@ void ElfPeHeader::createHeaderSection(const std::vector<section_mapping_t> &sect
     auto filteredSectionSet = std::vector<section_mapping_t>();
     for (auto i = sectionRvaSet.begin(); i != sectionRvaSet.end(); i++) {
         const ElfObjectFile::Section *section = i->section;
-        if (section->logicalSize() == 0) {
+        if (!(section->getFlags() & SHF_ALLOC)) {
             continue;
         }
 

@@ -2526,12 +2526,15 @@ index b4c9dc48..7df5a73c 100644
  #define _ALLOCA_S_MARKER_SIZE 16
 diff --git a/mingw-w64-headers/crt/ppchack.h b/mingw-w64-headers/crt/ppchack.h
 new file mode 100644
-index 00000000..9969db09
+index 00000000..c691e420
 --- /dev/null
 +++ b/mingw-w64-headers/crt/ppchack.h
-@@ -0,0 +1,4 @@
+@@ -0,0 +1,7 @@
 +#ifndef MINGW_PPC
 +#define MINGW_PPC
++
++#define NTSYSAPI
++#define __cdecl
 +
 +#endif /* MINGW_PPC */
 diff --git a/mingw-w64-headers/crt/profile.h b/mingw-w64-headers/crt/profile.h

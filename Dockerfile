@@ -3,7 +3,10 @@ RUN mkdir -p /rosbe
 RUN mkdir -p /rosbe/build
 WORKDIR /rosbe
 
-RUN apt-get update -y && apt-get install -y gcc g++ autoconf automake info git make libgmp-dev curl bzip2 libmpfr-dev
+RUN ln -fs /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
+RUN apt-get update -y
+RUN apt-get install -y --no-install-recommends tzdata
+RUN apt-get install -y gcc g++ autoconf automake info git make libgmp-dev curl bzip2 libmpfr-dev ssh
 
 RUN mkdir -p gnu
 

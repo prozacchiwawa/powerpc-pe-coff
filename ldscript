@@ -10,7 +10,14 @@ SECTIONS
     *(.text)
     *(init)
     *(INIT)
+    . = ALIGN(16);
+    LONG(1398035011);
+    LONG(1414676820);
+    . = ALIGN(16);
     *(SORT(.CRT*))
+    . = ALIGN(16);
+    LONG(1414677290);
+    LONG(709119557);
     __text_end__ = .;
     . = ALIGN(4096);
   }
@@ -28,6 +35,7 @@ SECTIONS
      *(.rodata*)
      *(.got2)
      *(.eh_frame)
+     *(.sdata)
      . = ALIGN(4096);
   }
   .tls :
