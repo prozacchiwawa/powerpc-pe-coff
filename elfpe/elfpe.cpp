@@ -48,9 +48,13 @@ int execute_command( bool verbose, const std::vector<std::string> &args )
 	else
 	{
 		int w = waitpid(pid, &status, 0);
-		fprintf(stderr, "waitpid res %d\n", w);
+		if (verbose) {
+        fprintf(stderr, "waitpid res %d\n", w);
+    }
 	}
-	fprintf(stderr, "status result %d\n", status);
+  if (verbose) {
+      fprintf(stderr, "status result %d\n", status);
+  }
 	return status;
 }
 
@@ -227,14 +231,6 @@ int main( int argc, char **argv ) {
         }
     }
 
-    // Nostdlib
-    if( !nostdlib && !compile_only ) {
-        gcc_args_str.push_back(std::string("-L") + mingw_lib_dir);
-        gcc_args_str.push_back("-lmingw32");
-        gcc_args_str.push_back("-lkernel32");
-        gcc_args_str.push_back("-lcrtdll");
-    }
-
     const char *system_include_dir_list[] = {
         "lib/mingw-w64-headers/include",
         "lib/mingw-w64-headers/crt",
@@ -287,6 +283,15 @@ int main( int argc, char **argv ) {
     }
 
     gcc_args_str.insert(gcc_args_str.begin(),gcc_name);
+
+    // Nostdlib
+    if( !nostdlib && !compile_only ) {
+        gcc_args_str.push_back(std::string("-L") + mingw_lib_dir);
+        gcc_args_str.push_back("-lmingw32");
+        gcc_args_str.push_back("-lmsvcrt");
+        gcc_args_str.push_back("-lcrtdll");
+        gcc_args_str.push_back("-lkernel32");
+    }
 
     if( verbose ) {
         fprintf( stderr, "#" );
@@ -359,6 +364,10 @@ int main( int argc, char **argv ) {
         header.createHeaderSection(sectionRvas, imageSize);
         eof.addSection(".peheader", header.getData(), SHT_PROGBITS);
         eof.update();
+
+        if (verbose) {
+            eof.listSymbols(sectionRvas, output_file);
+        }
 
         PECoffExecutable cof(eof, output_file + ".tmp", strtoul(file_align.c_str(), 0, 0));
         cof.Write(output_file);

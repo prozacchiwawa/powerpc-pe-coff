@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <libelf.h>
 #include <fcntl.h>
+#include <fstream>
 #include "util.h"
 #include "objectfile.h"
 
@@ -196,4 +197,38 @@ const ElfObjectFile::Section *ElfObjectFile::findRelocSection(int for_section) {
     }
 
     return NULL;
+}
+
+void ElfObjectFile::listSymbols(const std::vector<section_mapping_t> &rvas, const std::string &outfile) const {
+    char rva_buf[10];
+    std::ofstream symbols_lst((outfile + ".lst").c_str());
+    for (auto s = symbols_by_name.begin(); s != symbols_by_name.end(); s++) {
+        sprintf(rva_buf, "%08x", s->second->offset);
+        auto mapping_index = -1;
+        auto offset = s->second->offset;
+        auto section_number = s->second->section;
+        for (auto m = rvas.begin(); m != rvas.end(); m++) {
+            if (m->index == section_number) {
+                sprintf(rva_buf, "%08x", m->rva + offset);
+                mapping_index = m->index;
+                symbols_lst << rva_buf << " --- " << s->second->name << " " << getSection(m->index).getName() << "\n";
+                break;
+            }
+        }
+        const Section *sptr = nullptr;
+        if (s->second->section == 0xfff1) {
+            symbols_lst << rva_buf << " ABS " << s->second->name << "\n";
+        } else if (mapping_index == -1) {
+            if (s->second->section >= getNumSections()) {
+                symbols_lst << s->second->name << " exists in out of range section " << s->second->section << "\n";
+            } else {
+                sptr = &getSection(mapping_index);
+                if (sptr) {
+                    symbols_lst << s->second->name << " section number " << s->second->section << " not found\n";
+                } else {
+                    symbols_lst << s->second->name << " exists in eliminated section " << sptr->getName() << "\n";
+                }
+            }
+        }
+    }
 }

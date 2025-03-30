@@ -132,6 +132,8 @@ public:
     void removeSection(const std::string &name);
     const Section *findRelocSection(int for_section);
 
+    void listSymbols(const std::vector<struct section_mapping_t> &rvas, const std::string &outfile) const;
+
     void setIat(const u32pair_t &iat) {
         printf("set iat %08x %08x\n", iat.first, iat.second);
         this->iat = iat;
