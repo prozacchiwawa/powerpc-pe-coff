@@ -317,6 +317,8 @@ int main( int argc, char **argv ) {
         ElfObjectFile eof(output_file);
         if(!eof) exit(1);
 
+        eof.allocateComdat();
+
         uint32_t imageSize;
         const ElfObjectFile::Symbol *entry_sym;
         entry_sym = eof.getNamedSymbol(entry_point);

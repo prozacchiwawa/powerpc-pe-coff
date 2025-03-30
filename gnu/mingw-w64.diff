@@ -12,6 +12,231 @@ index 41cb5739..023dc37e 100644
  #else
  #ifdef __GNUC__
    __asm__ ("fninit");
+diff --git a/mingw-w64-crt/crt/crtexe.c b/mingw-w64-crt/crt/crtexe.c
+index ae37e0fe..335d9a35 100644
+--- a/mingw-w64-crt/crt/crtexe.c
++++ b/mingw-w64-crt/crt/crtexe.c
+@@ -21,6 +21,10 @@
+ #include <sect_attribs.h>
+ #include <locale.h>
+ 
++#ifdef _PPC_
++#define InterlockedCompareExchange _InterlockedCompareExchange
++#endif
++
+ #ifndef __winitenv
+ extern wchar_t *** __MINGW_IMP_SYMBOL(__winitenv);
+ #define __winitenv (* __MINGW_IMP_SYMBOL(__winitenv))
+@@ -60,6 +64,14 @@ extern _CRTALLOC(".CRT$XIZ") _PIFV __xi_z[];
+ extern _CRTALLOC(".CRT$XCA") _PVFV __xc_a[];
+ extern _CRTALLOC(".CRT$XCZ") _PVFV __xc_z[];
+ 
++#ifdef _PPC_
++static void * InterlockedExchangePointer(void * volatile * const Target, void * const Value) {
++	/* NOTE: ditto */
++	__sync_synchronize();
++	return __sync_lock_test_and_set(Target, Value);
++}
++#endif
++
+ /* TLS initialization hook.  */
+ extern const PIMAGE_TLS_CALLBACK __dyn_tls_init_callback;
+ 
+@@ -208,7 +220,9 @@ int mainCRTStartup (void)
+     );
+ #endif
+   mingw_app_type = 0;
++#ifndef _PPC_
+   __security_init_cookie ();
++#endif
+   ret = __tmainCRTStartup ();
+ #if defined(__SEH__) && !defined(__clang__)
+   asm ("\tnop\n"
+@@ -217,6 +231,50 @@ int mainCRTStartup (void)
+   return ret;
+ }
+ 
++struct NameAndValue { const char *name; DWORD value; };
++void WriteString(HANDLE h, const char *msg) {
++  DWORD bytes = 0;
++  WriteFile(h, msg, strlen(msg), &bytes, NULL);
++}
++
++void FormatNumber(char *buf, DWORD n) {
++  const char *hex = "0123456789abcdef";
++  for (int i = 0; i < 8; i++) {
++    buf[i] = hex[n >> 28];
++    n <<= 4;
++  }
++  buf[8] = 0;
++}
++
++void Dump(const char *msg, struct NameAndValue *dump)
++{
++  char buf[10];
++  HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
++  WriteString(h, msg);
++  WriteString(h, "\n");
++  while (dump->name) {
++    WriteString(h, dump->name);
++    WriteString(h, ": ");
++    FormatNumber(buf, dump->value);
++    WriteString(h, buf);
++    WriteString(h, "\n");
++    dump++;
++  }
++}
++
++void Emote(const char *msg) {
++  HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
++  WriteString(h, msg);
++  WriteString(h, "\n");
++}
++
++void AddNV(struct NameAndValue *nv, int *nvptr, const char *name, DWORD value) {
++  nv[*nvptr].name = name;
++  nv[*nvptr].value = value;
++  *nvptr++;
++  Dump("AddNV", nv);
++}
++
+ static
+ __declspec(noinline) int
+ __tmainCRTStartup (void)
+@@ -224,6 +282,9 @@ __tmainCRTStartup (void)
+   _TCHAR *lpszCommandLine = NULL;
+   STARTUPINFO StartupInfo;
+   WINBOOL inDoubleQuote = FALSE;
++  struct NameAndValue nv[16] = { { "mingw_app_type", mingw_app_type }, { 0 } };
++  int nvptr = 1;
++
+   memset (&StartupInfo, 0, sizeof (STARTUPINFO));
+ 
+ #if defined(__i386__) || defined(_X86_)
+@@ -239,63 +300,96 @@ __tmainCRTStartup (void)
+ 
+   if (mingw_app_type)
+     GetStartupInfo (&StartupInfo);
++
++  Dump("after GetStartupInfo", nv);
++
+   {
+     void *lock_free = NULL;
++    Emote("getting fiber id");
+     void *fiberid = ((PNT_TIB)NtCurrentTeb())->StackBase;
++    AddNV(nv, &nvptr, "fiberid", (DWORD)fiberid);
+     int nested = FALSE;
+     while((lock_free = InterlockedCompareExchangePointer ((volatile PVOID *) &__native_startup_lock,
+ 							  fiberid, 0)) != 0)
+       {
++        Emote("lock_free loop");
+ 	if (lock_free == fiberid)
+ 	  {
++      Emote("have lock");
+ 	    nested = TRUE;
+ 	    break;
+ 	  }
++  Emote("Sleep(1000)");
+ 	Sleep(1000);
++  Emote("Sleep done");
+       }
++    Emote("after lock free");
+     if (__native_startup_state == __initializing)
+       {
++        Emote("_amsg_exit");
+ 	_amsg_exit (31);
+       }
+     else if (__native_startup_state == __uninitialized)
+       {
++        Emote("__native_startup_state uninit");
+ 	__native_startup_state = __initializing;
++  Emote("__native_start_state initializing, doing _initterm");
+ 	_initterm ((_PVFV *)(void *)__xi_a, (_PVFV *)(void *) __xi_z);
++  Emote("_initterm done");
+       }
+     else
+       has_cctor = 1;
+ 
++    Emote("checking __native_startup_state");
+     if (__native_startup_state == __initializing)
+       {
++        Emote("__native_startup_state initializing, doing _initterm");
+ 	_initterm (__xc_a, __xc_z);
++  Emote("_initterm done");
+ 	__native_startup_state = __initialized;
++  Emote("__native_startup_state initialized");
+       }
+     _ASSERTE(__native_startup_state == __initialized);
+-    if (! nested)
++    if (! nested) {
++      Emote("not nested, giving up lock");
+       (VOID)InterlockedExchangePointer ((volatile PVOID *) &__native_startup_lock, 0);
+-    
+-    if (__dyn_tls_init_callback != NULL)
++      Emote("after give up lock");
++    }
++
++    if (__dyn_tls_init_callback != NULL) {
++      Emote("before __dyn_tls_init_callback");
+       __dyn_tls_init_callback (NULL, DLL_THREAD_ATTACH, NULL);
+-    
++      Emote("after __dyn_tls_init_callback");
++    }
++
++    Emote("before _pei386_runtime_relocator");
+     _pei386_runtime_relocator ();
++    Emote("after _pei386_runtime_relocator");
+     __mingw_oldexcpt_handler = SetUnhandledExceptionFilter (_gnu_exception_handler);
++    Emote("after SetUnhandledExceptionFilter");
+ #ifdef _WIN64
+     __mingw_init_ehandler ();
+ #endif
++    Emote("set invalid parameter handler");
+     _set_invalid_parameter_handler (__mingw_invalidParameterHandler);
+-    
++
++    Emote("fpreset");
+     _fpreset ();
++    AddNV(nv, &nvptr, "&__ImageBase", (DWORD)&__ImageBase);
+ 
+     __mingw_winmain_hInstance = (HINSTANCE) &__ImageBase;
++    Emote("set hinstance");
+ 
+ #ifdef WPRFLAG
+     lpszCommandLine = (_TCHAR *) _wcmdln;
+ #else
+     lpszCommandLine = (char *) _acmdln;
+ #endif
++    Emote("lpszCommandLine");
+ 
+     if (lpszCommandLine)
+       {
++        Emote(lpszCommandLine);
+ 	while (*lpszCommandLine > SPACECHAR || (*lpszCommandLine && inDoubleQuote))
+ 	  {
+ 	    if (*lpszCommandLine == DQUOTECHAR)
+@@ -320,8 +414,11 @@ __tmainCRTStartup (void)
+ 	__mingw_winmain_nShowCmd = StartupInfo.dwFlags & STARTF_USESHOWWINDOW ?
+ 				    StartupInfo.wShowWindow : SW_SHOWDEFAULT;
+       }
++    Emote("duplicate_ppstrings");
+     duplicate_ppstrings (argc, &argv);
++    Emote("call __main");
+     __main ();
++    Emote("after __main");
+ #ifdef WPRFLAG
+     __winitenv = envp;
+     /* C++ initialization.
+@@ -331,7 +428,9 @@ __tmainCRTStartup (void)
+ #ifndef __arm__
+     __initenv = envp;
+ #endif
++    Emote("calling main");
+     mainret = main (argc, argv, envp);
++    Emote("after main");
+ #endif
+     if (!managedapp)
+       exit (mainret);
 diff --git a/mingw-w64-crt/crt/merr.c b/mingw-w64-crt/crt/merr.c
 index f3dff580..d6e1ddcb 100644
 --- a/mingw-w64-crt/crt/merr.c
@@ -147,6 +372,48 @@ index 81a2f7b3..eae9f0bc 100644
  __LONG32 InterlockedAnd(__LONG32 volatile *, __LONG32) __attribute__((alias("_InterlockedAnd")));
 +#endif
  
+diff --git a/mingw-w64-crt/intrincs/ilockcxch.c b/mingw-w64-crt/intrincs/ilockcxch.c
+index 3998df53..a4e7bdd4 100644
+--- a/mingw-w64-crt/intrincs/ilockcxch.c
++++ b/mingw-w64-crt/intrincs/ilockcxch.c
+@@ -1,4 +1,16 @@
+ #define __INTRINSIC_ONLYSPECIAL
+ #define __INTRINSIC_SPECIAL__InterlockedCompareExchange /* Causes code generation in intrin-impl.h */
+ 
++#ifdef _PPC_
++#ifndef PPC_INTERLOCKED_EXCHANGE_POINTER
++#define PPC_INTERLOCKED_EXCHANGE_POINTER
++void *_InterlockedCompareExchange(long *Target, long Exchange, long Comperand)
++{
++	/* NOTE: ditto */
++	__sync_synchronize();
++	return __sync_val_compare_and_swap(Target, Comperand, Exchange);
++}
++#endif
++#else
+ #include <intrin.h>
++#endif
+diff --git a/mingw-w64-crt/intrincs/ilockexchptr.c b/mingw-w64-crt/intrincs/ilockexchptr.c
+index cbd2b18d..3719a3b5 100644
+--- a/mingw-w64-crt/intrincs/ilockexchptr.c
++++ b/mingw-w64-crt/intrincs/ilockexchptr.c
+@@ -1,4 +1,16 @@
+ #define __INTRINSIC_ONLYSPECIAL
+ #define __INTRINSIC_SPECIAL__InterlockedExchangePointer /* Causes code generation in intrin-impl.h */
+ 
++#ifdef _PPC_
++#ifndef PPC_INTERLOCKED_EXCHANGE_POINTER
++#define PPC_INTERLOCKED_EXCHANGE_POINTER
++void * _InterlockedExchangePointer(void * volatile * const Target, void * const Value)
++{
++	/* NOTE: ditto */
++	__sync_synchronize();
++	return __sync_lock_test_and_set(Target, Value);
++}
++#endif
++#else
+ #include <intrin.h>
++#endif
 diff --git a/mingw-w64-crt/intrincs/ilockor.c b/mingw-w64-crt/intrincs/ilockor.c
 index 1579c505..dca3a074 100644
 --- a/mingw-w64-crt/intrincs/ilockor.c
@@ -2125,6 +2392,19 @@ index f33591d0..b2e75dd6 100644
  /* profiling frequency.  (No larger than 1000) */
  #define PROF_HZ			100
  
+diff --git a/mingw-w64-crt/stdio/mingw_lock.c b/mingw-w64-crt/stdio/mingw_lock.c
+index fe317802..249bf610 100644
+--- a/mingw-w64-crt/stdio/mingw_lock.c
++++ b/mingw-w64-crt/stdio/mingw_lock.c
+@@ -9,7 +9,7 @@
+  * functions (printf, fprintf, vprintf, vfprintf). We need exactly the same
+  * lock that MS uses in msvcrt.dll because we can mix mingw-w64 code with
+  * original MS functions (puts, fputs for example).
+-***/ 
++***/
+ 
+ 
+ _CRTIMP void __cdecl _lock(int locknum);
 diff --git a/mingw-w64-crt/stdio/mingw_vfscanf.c b/mingw-w64-crt/stdio/mingw_vfscanf.c
 index 4bd9e91c..f5b605d3 100644
 --- a/mingw-w64-crt/stdio/mingw_vfscanf.c
@@ -3188,7 +3468,7 @@ index c78cc339..9186c1d6 100644
  #else
  #define __RPC_API __stdcall
 diff --git a/mingw-w64-headers/include/winnt.h b/mingw-w64-headers/include/winnt.h
-index a855801b..e5214c35 100644
+index a855801b..b863f7f5 100644
 --- a/mingw-w64-headers/include/winnt.h
 +++ b/mingw-w64-headers/include/winnt.h
 @@ -126,6 +126,8 @@ extern "C" {
@@ -3213,18 +3493,115 @@ index a855801b..e5214c35 100644
  
  #ifndef __WCHAR_DEFINED
  #define __WCHAR_DEFINED
-@@ -1752,6 +1757,16 @@ extern "C" {
+@@ -1752,6 +1757,113 @@ extern "C" {
  
  #endif /* end of _AMD64_ */
  
 +#ifdef __powerpc__
 +
-+  typedef struct DECLSPEC_ALIGN(16) _CONTEXT {
-+    DWORD Gpr[32];
-+    DWORD Msr;
-+    DWORD Ctr;
++  static struct _TEB *NtCurrentTeb(void)
++  {
++    struct _TEB *result;
++    __asm__("ori %0,13,0" : "=r" (result));
++    return result;
++  }
++
++typedef struct _CONTEXT
++{
++    /* These are selected by CONTEXT_FLOATING_POINT */
++    double Fpr0;
++    double Fpr1;
++    double Fpr2;
++    double Fpr3;
++    double Fpr4;
++    double Fpr5;
++    double Fpr6;
++    double Fpr7;
++    double Fpr8;
++    double Fpr9;
++    double Fpr10;
++    double Fpr11;
++    double Fpr12;
++    double Fpr13;
++    double Fpr14;
++    double Fpr15;
++    double Fpr16;
++    double Fpr17;
++    double Fpr18;
++    double Fpr19;
++    double Fpr20;
++    double Fpr21;
++    double Fpr22;
++    double Fpr23;
++    double Fpr24;
++    double Fpr25;
++    double Fpr26;
++    double Fpr27;
++    double Fpr28;
++    double Fpr29;
++    double Fpr30;
++    double Fpr31;
++    double Fpscr;
++
++    /* These are selected by CONTEXT_INTEGER */
++    DWORD Gpr0;
++    DWORD Gpr1;
++    DWORD Gpr2;
++    DWORD Gpr3;
++    DWORD Gpr4;
++    DWORD Gpr5;
++    DWORD Gpr6;
++    DWORD Gpr7;
++    DWORD Gpr8;
++    DWORD Gpr9;
++    DWORD Gpr10;
++    DWORD Gpr11;
++    DWORD Gpr12;
++    DWORD Gpr13;
++    DWORD Gpr14;
++    DWORD Gpr15;
++    DWORD Gpr16;
++    DWORD Gpr17;
++    DWORD Gpr18;
++    DWORD Gpr19;
++    DWORD Gpr20;
++    DWORD Gpr21;
++    DWORD Gpr22;
++    DWORD Gpr23;
++    DWORD Gpr24;
++    DWORD Gpr25;
++    DWORD Gpr26;
++    DWORD Gpr27;
++    DWORD Gpr28;
++    DWORD Gpr29;
++    DWORD Gpr30;
++    DWORD Gpr31;
++
 +    DWORD Cr;
-+  } CONTEXT, *PCONTEXT;
++    DWORD Xer;
++
++    /* These are selected by CONTEXT_CONTROL */
++    DWORD Msr;
++    DWORD Iar; /* Instruction Address Register , aka PC ... */
++    DWORD Lr;
++    DWORD Ctr;
++
++    DWORD ContextFlags;
++    
++    DWORD Dar;   /* Fault registers for coredump */
++    DWORD Dsisr; 
++    DWORD Trap;  /* number of powerpc exception taken */
++
++    /* These are selected by CONTEXT_DEBUG_REGISTERS */
++    DWORD Dr0;
++    DWORD Dr1;
++    DWORD Dr2;
++    DWORD Dr3;
++    DWORD Dr4;
++    DWORD Dr5;
++    DWORD Dr6;
++    DWORD Dr7;
++} CONTEXT, *PCONTEXT;
 +
 +#endif
  

@@ -13,13 +13,19 @@ public:
 
     class Symbol {
     public:
-      Symbol(const std::string &name, uint32_t offset,
-             int section, int flags) :
-        name(name), offset(offset), section(section), flags(flags) { }
-      std::string name;
-      uint32_t offset;
-      int section;
-      int flags;
+        Symbol(const std::string &name, uint32_t offset,
+               int section, int flags) :
+            name(name),
+            offset(offset),
+            section(section),
+            flags(flags) { }
+
+        int index;
+        int source;
+        std::string name;
+        uint32_t offset;
+        int section;
+        int flags;
     };
 
     class Section {
@@ -132,6 +138,17 @@ public:
     void removeSection(const std::string &name);
     const Section *findRelocSection(int for_section);
 
+    void setSectionSize(int section, uint32_t size);
+    void allocateComdat();
+    uint32_t getComdat(const std::string &name) const {
+        auto found = comdat_bss_offsets.find(name);
+        if (found == comdat_bss_offsets.end()) {
+            return 0xffffffff;
+        } else {
+            fprintf(stderr, "found comdat %08x: %s\n", found->second, name.c_str());
+            return found->second;
+        }
+    }
     void listSymbols(const std::vector<struct section_mapping_t> &rvas, const std::string &outfile) const;
 
     void setIat(const u32pair_t &iat) {
@@ -158,6 +175,7 @@ private:
     std::map<std::string, const Section *> sections_by_name;
     std::vector<Symbol*> symbols;
     std::map<std::string, const Symbol *> symbols_by_name;
+    std::map<std::string, uint32_t> comdat_bss_offsets;
     u32pair_t iat;
     uint32_t real_entry_point;
 

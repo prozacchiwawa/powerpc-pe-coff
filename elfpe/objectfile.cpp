@@ -153,6 +153,14 @@ void ElfObjectFile::addSection(const std::string &name, const secdata_t &data, i
     populateSections();
 }
 
+void ElfObjectFile::setSectionSize(int section, uint32_t size)
+{
+    Elf_Scn *scn = elf_getscn(elfHeader, section);
+    Elf32_Shdr *shdr = elf32_getshdr(scn);
+    shdr->sh_size = size;
+    elf_update(elfHeader, ELF_C_WRITE);
+}
+
 void ElfObjectFile::removeSection(const std::string &name)
 {
     auto section = this->getNamedSection(name);
@@ -199,14 +207,46 @@ const ElfObjectFile::Section *ElfObjectFile::findRelocSection(int for_section) {
     return NULL;
 }
 
+#define ROUND_UP4(x) (((x)+3)&~3)
+
+void ElfObjectFile::allocateComdat() {
+    auto bss = getNamedSection(".bss");
+    if (!bss) {
+        fprintf(stderr, "bss missing (possibly create it)?\n");
+        exit(1);
+    }
+    auto startingBssLength = ROUND_UP4(bss->logicalSize());
+    for (auto s = symbols_by_name.begin(); s != symbols_by_name.end(); s++) {
+        if (s->second->section == 0xfff2) {
+            comdat_bss_offsets.insert(std::make_pair(s->second->name, startingBssLength));
+            startingBssLength += ROUND_UP4(s->second->offset);
+        }
+    }
+    setSectionSize(bss->getNumber(), startingBssLength);
+}
+
 void ElfObjectFile::listSymbols(const std::vector<section_mapping_t> &rvas, const std::string &outfile) const {
     char rva_buf[10];
     std::ofstream symbols_lst((outfile + ".lst").c_str());
+    auto bss = getNamedSection(".bss");
+
     for (auto s = symbols_by_name.begin(); s != symbols_by_name.end(); s++) {
         sprintf(rva_buf, "%08x", s->second->offset);
         auto mapping_index = -1;
         auto offset = s->second->offset;
         auto section_number = s->second->section;
+
+        auto found = comdat_bss_offsets.find(s->second->name);
+        if (found != comdat_bss_offsets.end()) {
+            if (!bss) {
+                fprintf(stderr, "comdat with no bss: %s\n", s->second->name.c_str());
+                exit(1);
+            }
+
+            offset = found->second;
+            section_number = bss->getNumber();
+        }
+
         for (auto m = rvas.begin(); m != rvas.end(); m++) {
             if (m->index == section_number) {
                 sprintf(rva_buf, "%08x", m->rva + offset);

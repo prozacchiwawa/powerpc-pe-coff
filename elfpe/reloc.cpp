@@ -200,6 +200,18 @@ void SingleRelocSection
         auto symptr = &symbolSection.getSectionData()
             [ELF32_R_SYM(reloc.r_info) * sizeof(symbol)];
         memcpy(&symbol, symptr, sizeof(symbol));
+        auto name = obf.getSymbolName(symbolSection.getLink(), symbol.st_name);
+        auto comdat = obf.getComdat(name);
+        if (comdat != 0xffffffff) {
+          auto bss = obf.getNamedSection(".bss");
+          if (!bss) {
+            fprintf(stderr, "comdat %s with no bss\n", name);
+            exit(1);
+          }
+          fprintf(stderr, "reloc: %s is comdat at %08x\n", name.c_str(), (unsigned int)comdat);
+          symbol.st_shndx = bss->getNumber();
+          symbol.st_value = comdat;
+        }
 
         SingleReloc
             (obf,
