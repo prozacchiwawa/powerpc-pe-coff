@@ -17,6 +17,11 @@ fi
 
 idir="$1"
 libdir="$idir"/lib
+export INSTALLDIR="${idir}"
+
+mkdir -p "${INSTALLDIR}/lib"
+mkdir -p "${INSTALLDIR}/ovr"
+mkdir -p ./ovr
 
 # Build and install binutils
 if [ ! -d build/binutils-configure ] ; then
@@ -60,17 +65,19 @@ export PATH="$idir/bin":$PATH
 )
 
 (cd build/gcc-configure/gcc && CFLAGS_FOR_TARGET="-fPIE -mlittle" sh ../../../gnu/gcc-4.1.0/gcc/configure --target=powerpcle-unknown-elf --prefix=/build --disable-ssp --disable-threads --without-headers --disable-multilib --enable-languages=c)
-# # Make elfpe
-# make -C elfpe && cp elfpe/elfpe ovr/powerpcle-unknown-elf-gcc || exit 1
-# # Make env script
-# echo '#!/bin/sh' > "$idir"/rosbe
-# echo 'THISDIR=`dirname $0`' >> "$idir"/rosbe
-# echo export PATH='"$THISDIR/ovr:$THISDIR/bin:$PATH"' >> "$idir"/rosbe
-# echo export 'INSTALLDIR="$THISDIR"' >> "$idir"/rosbe
-# echo export OLDMAKE=`which make` >> "$idir"/rosbe
-# echo echo "\"Run make in your reactos dir to build\"" >> "$idir"/rosbe
-# echo exec $SHELL >> "$idir"/rosbe
-# chmod +x "$idir"/rosbe
-# echo Run "\"$idir/rosbe\"" to get a shell with the right settings
-# # Make wrappers
-# cp -r ovr "$idir"
+
+# Make elfpe
+make -C elfpe && cp elfpe/elfpe "${INSTALLDIR}/ovr/powerpcle-unknown-elf-gcc" || exit 1
+
+# Make env script
+echo '#!/bin/sh' > "$idir"/rosbe
+echo 'THISDIR=`dirname $0`' >> "$idir"/rosbe
+echo export PATH='"$THISDIR/ovr:$THISDIR/bin:$PATH"' >> "$idir"/rosbe
+echo export 'INSTALLDIR="$THISDIR"' >> "$idir"/rosbe
+echo export OLDMAKE=`which make` >> "$idir"/rosbe
+echo echo "\"Run make in your reactos dir to build\"" >> "$idir"/rosbe
+echo exec $SHELL >> "$idir"/rosbe
+chmod +x "$idir"/rosbe
+echo Run "\"$idir/rosbe\"" to get a shell with the right settings
+# Make wrappers
+cp -r ovr "$idir"

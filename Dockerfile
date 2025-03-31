@@ -26,22 +26,15 @@ RUN (cd gnu/binutils-2.16.1 && patch -p1 < ../binutils-2.16.1.diff)
 
 COPY ldscript /rosbe
 COPY install.sh /rosbe
+ADD elfpe /rosbe/elfpe
+
 RUN /bin/bash install.sh /build
 
+ENV INSTALLDIR=/build
 RUN (PATH="${PATH}:/build/bin" && cd build/gcc-configure/gcc && make && make install)
 
-ADD elfpe /rosbe/elfpe
-RUN make -C elfpe clean && make -C elfpe
-
-RUN mkdir -p /build/ovr
-RUN cp elfpe/elfpe /build/ovr/powerpcle-unknown-elf-gcc
-ENV INSTALLDIR=/build
-
-RUN mkdir -p /build/lib
 RUN (cd gnu/mingw-w64 && patch -p1 < ../mingw-w64.diff)
 RUN (cd gnu/mingw-w64 && cp -r mingw-w64-headers /build/lib/)
-
-COPY ldscript install.sh /rosbe
 
 RUN (cd gnu/mingw-w64/mingw-w64-headers && ./configure --prefix=/build --target=powerpcle-unknown-elf)
 RUN cp -r gnu/mingw-w64/mingw-w64-headers/* /build/lib/mingw-w64-headers
