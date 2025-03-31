@@ -75,6 +75,11 @@ make -C elfpe && cp elfpe/elfpe "${INSTALLDIR}/ovr/powerpcle-unknown-elf-gcc" ||
 (cd gnu/mingw-w64/mingw-w64-headers && ./configure --prefix="${INSTALLDIR}" --target=powerpcle-unknown-elf)
 cp -r gnu/mingw-w64/mingw-w64-headers/* "${INSTALLDIR}/lib/mingw-w64-headers"
 
+(PATH="${PATH}:${INSTALLDIR}/ovr:${INSTALLDIR}/bin" && cd gnu/mingw-w64 && CFLAGS="-I${INSTALLDIR}/lib/mingw-w64-headers/include -I${INSTALLDIR}/lib/mingw-w64-headers/crt -I${INSTALLDIR}/mingw-w64-headers" ./configure --prefix=${INSTALLDIR} --target=powerpcle-unknown-elf --disable-lib64)
+
+mkdir -p ${INSTALLDIR}/lib/mingw-w64-headers/sdks && touch ${INSTALLDIR}/lib/mingw-w64-headers/sdks/_mingw_directx.h ${INSTALLDIR}/lib/mingw-w64-headers/sdks/_mingw_ddk.h
+mkdir -p gnu/mingw-w64/mingw-w64-crt/lib32
+
 # Make env script
 echo '#!/bin/sh' > "$idir"/rosbe
 echo 'THISDIR=`dirname $0`' >> "$idir"/rosbe
