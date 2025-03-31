@@ -32,11 +32,6 @@ RUN /bin/bash install.sh /build
 
 ENV INSTALLDIR=/build
 
-RUN (cd gnu/mingw-w64 && patch -p1 < ../mingw-w64.diff)
-RUN (cd gnu/mingw-w64 && cp -r mingw-w64-headers /build/lib/)
-
-RUN (cd gnu/mingw-w64/mingw-w64-headers && ./configure --prefix=/build --target=powerpcle-unknown-elf)
-RUN cp -r gnu/mingw-w64/mingw-w64-headers/* /build/lib/mingw-w64-headers
 RUN (PATH="${PATH}:/build/ovr:/build/bin" && cd gnu/mingw-w64 && CFLAGS="-I/build/lib/mingw-w64-headers/include -I/build/lib/mingw-w64-headers/crt -I/build/mingw-w64-headers" ./configure --prefix=/build --target=powerpcle-unknown-elf --disable-lib64)
 
 RUN mkdir -p /build/lib/mingw-w64-headers/sdks && touch /build/lib/mingw-w64-headers/sdks/_mingw_directx.h /build/lib/mingw-w64-headers/sdks/_mingw_ddk.h

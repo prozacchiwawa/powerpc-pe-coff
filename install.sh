@@ -70,6 +70,10 @@ export PATH="$idir/bin":$PATH
 make -C elfpe && cp elfpe/elfpe "${INSTALLDIR}/ovr/powerpcle-unknown-elf-gcc" || exit 1
 
 (PATH="${PATH}:${INSTALLDIR}/bin" && cd build/gcc-configure/gcc && make && make install)
+(cd gnu/mingw-w64 && patch -p1 < ../mingw-w64.diff)
+(cd gnu/mingw-w64 && cp -r mingw-w64-headers /build/lib/)
+(cd gnu/mingw-w64/mingw-w64-headers && ./configure --prefix="${INSTALLDIR}" --target=powerpcle-unknown-elf)
+cp -r gnu/mingw-w64/mingw-w64-headers/* "${INSTALLDIR}/lib/mingw-w64-headers"
 
 # Make env script
 echo '#!/bin/sh' > "$idir"/rosbe
