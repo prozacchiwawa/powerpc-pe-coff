@@ -69,6 +69,8 @@ export PATH="$idir/bin":$PATH
 # Make elfpe
 make -C elfpe && cp elfpe/elfpe "${INSTALLDIR}/ovr/powerpcle-unknown-elf-gcc" || exit 1
 
+(PATH="${PATH}:${INSTALLDIR}/bin" && cd build/gcc-configure/gcc && make && make install)
+
 # Make env script
 echo '#!/bin/sh' > "$idir"/rosbe
 echo 'THISDIR=`dirname $0`' >> "$idir"/rosbe

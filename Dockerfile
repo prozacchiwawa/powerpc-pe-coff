@@ -31,7 +31,6 @@ ADD elfpe /rosbe/elfpe
 RUN /bin/bash install.sh /build
 
 ENV INSTALLDIR=/build
-RUN (PATH="${PATH}:/build/bin" && cd build/gcc-configure/gcc && make && make install)
 
 RUN (cd gnu/mingw-w64 && patch -p1 < ../mingw-w64.diff)
 RUN (cd gnu/mingw-w64 && cp -r mingw-w64-headers /build/lib/)
