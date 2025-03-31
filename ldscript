@@ -33,7 +33,7 @@ SECTIONS
   {
      *(.pdata*)
      *(.rodata*)
-     *(.got2)
+     *(.got*)
      *(.eh_frame)
      *(.sdata)
      . = ALIGN(4096);

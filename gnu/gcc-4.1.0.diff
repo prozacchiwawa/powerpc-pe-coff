@@ -1,3 +1,154 @@
+diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/rs6000.c gcc-4.1.0/gcc/config/rs6000/rs6000.c
+--- gcc-4.1.0-orig/gcc/config/rs6000/rs6000.c	2006-02-10 12:58:33.000000000 -0800
++++ gcc-4.1.0/gcc/config/rs6000/rs6000.c	2025-03-30 21:25:08.646234905 -0700
+@@ -3565,7 +3565,7 @@
+ 
+   /* The TOC register is not killed across calls in a way that is
+      visible to the compiler.  */
+-  if (DEFAULT_ABI == ABI_AIX)
++  if ((DEFAULT_ABI == ABI_AIX) || (target_flags & MASK_WINNT))
+     call_really_used_regs[2] = 0;
+ 
+   if (DEFAULT_ABI == ABI_V4
+@@ -3992,7 +3992,7 @@
+ 
+ 	  /* If this is a function address on -mcall-aixdesc,
+ 	     convert it to the address of the descriptor.  */
+-	  if (DEFAULT_ABI == ABI_AIX
++	  if (((DEFAULT_ABI == ABI_AIX) || (target_flags & MASK_WINNT))
+ 	      && GET_CODE (operands[1]) == SYMBOL_REF
+ 	      && XSTR (operands[1], 0)[0] == '.')
+ 	    {
+@@ -10081,6 +10081,7 @@
+ 	  break;
+ 
+ 	case ABI_V4:
++    break;
+ 	case ABI_DARWIN:
+ 	  break;
+ 	}
+@@ -10629,10 +10630,15 @@
+ #endif
+ 	  assemble_name (file, name);
+ 	}
++      if (target_flags & MASK_WINNT)
++        {
++          fputs("..", file);
++          rs6000_output_function_entry (file, XSTR (x, 0));
++        }
+       else if (!DOT_SYMBOLS)
+-	assemble_name (file, XSTR (x, 0));
++        assemble_name (file, XSTR (x, 0));
+       else
+-	rs6000_output_function_entry (file, XSTR (x, 0));
++        rs6000_output_function_entry (file, XSTR (x, 0));
+       return;
+ 
+     case 'Z':
+@@ -10870,8 +10876,8 @@
+ 	 address into the address of the descriptor, not the function
+ 	 itself.  */
+       else if (GET_CODE (x) == SYMBOL_REF
+-	       && XSTR (x, 0)[0] == '.'
+-	       && DEFAULT_ABI == ABI_AIX)
++               && XSTR (x, 0)[0] == '.'
++               && ((DEFAULT_ABI == ABI_AIX) || (target_flags & MASK_WINNT)))
+ 	{
+ 	  const char *name = XSTR (x, 0);
+ 	  while (*name == '.')
+@@ -18077,27 +18083,39 @@
+   ASM_OUTPUT_TYPE_DIRECTIVE (file, name, "function");
+   ASM_DECLARE_RESULT (file, DECL_RESULT (decl));
+ 
+-  if (DEFAULT_ABI == ABI_AIX)
++  if ((DEFAULT_ABI == ABI_AIX) || (target_flags & MASK_WINNT))
+     {
+       const char *desc_name, *orig_name;
+ 
+       orig_name = (*targetm.strip_name_encoding) (name);
+       desc_name = orig_name;
+       while (*desc_name == '.')
+-	desc_name++;
++        desc_name++;
+ 
+-      if (TREE_PUBLIC (decl))
+-	fprintf (file, "\t.globl %s\n", desc_name);
++      if (TREE_PUBLIC (decl)) {
++        fprintf (file, "\t.globl %s\n", desc_name);
++        if (target_flags & MASK_WINNT) {
++          fprintf (file, "\t.globl ..%s\n", desc_name);
++        }
++      }
+ 
+       fprintf (file, "%s\n", MINIMAL_TOC_SECTION_ASM_OP);
+       fprintf (file, "%s:\n", desc_name);
+-      fprintf (file, "\t.long %s\n", orig_name);
++      fprintf (file, "\t.long ..%s\n", orig_name);
+       fputs ("\t.long _GLOBAL_OFFSET_TABLE_\n", file);
+       if (DEFAULT_ABI == ABI_AIX)
+-	fputs ("\t.long 0\n", file);
+-      fprintf (file, "\t.previous\n");
++        fputs ("\t.long 0\n", file);
++      if (target_flags & MASK_WINNT) {
++        fprintf (file, "\t.text\n");
++      } else {
++        fprintf (file, "\t.previous\n");
++      }
+     }
+-  ASM_OUTPUT_LABEL (file, name);
++  if (target_flags & MASK_WINNT) {
++    fprintf(file, "..%s:\n", name);
++  } else {
++    ASM_OUTPUT_LABEL (file, name);
++  }
+ }
+ 
+ static void
+diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/rs6000.h gcc-4.1.0/gcc/config/rs6000/rs6000.h
+--- gcc-4.1.0-orig/gcc/config/rs6000/rs6000.h	2006-02-10 12:58:33.000000000 -0800
++++ gcc-4.1.0/gcc/config/rs6000/rs6000.h	2025-03-30 18:46:22.415155342 -0700
+@@ -1237,9 +1237,11 @@
+   ABI_NONE,
+   ABI_AIX,			/* IBM's AIX */
+   ABI_V4,			/* System V.4/eabi */
+-  ABI_DARWIN			/* Apple's Darwin (OS X kernel) */
++  ABI_DARWIN,			/* Apple's Darwin (OS X kernel) */
+ };
+ 
++#define ABI_NT ABI_V4
++
+ extern enum rs6000_abi rs6000_current_abi;	/* available for use by subtarget */
+ 
+ /* Define this if pushing a word on the stack
+diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/rs6000.opt gcc-4.1.0/gcc/config/rs6000/rs6000.opt
+--- gcc-4.1.0-orig/gcc/config/rs6000/rs6000.opt	2005-11-14 21:00:40.000000000 -0800
++++ gcc-4.1.0/gcc/config/rs6000/rs6000.opt	2025-03-30 19:53:34.256492763 -0700
+@@ -36,6 +36,10 @@
+ Target Report RejectNegative Mask(POWERPC)
+ Use PowerPC instruction set
+ 
++mwinnt
++Target Report Mask(WINNT)
++Build for Windows NT
++
+ mno-powerpc
+ Target Report RejectNegative
+ Do not use PowerPC instruction set
+diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/sysv4.h gcc-4.1.0/gcc/config/rs6000/sysv4.h
+--- gcc-4.1.0-orig/gcc/config/rs6000/sysv4.h	2006-02-10 12:58:33.000000000 -0800
++++ gcc-4.1.0/gcc/config/rs6000/sysv4.h	2025-03-30 20:21:10.421436959 -0700
+@@ -89,6 +89,11 @@
+ 									\
+   if (!strcmp (rs6000_abi_name, "sysv"))				\
+     rs6000_current_abi = ABI_V4;					\
++  else if (!strcmp (rs6000_abi_name, "nt")) \
++    {                                                         \
++  rs6000_current_abi = ABI_V4;                                \
++      target_flags |= MASK_WINNT;                             \
++      }                                                   \
+   else if (!strcmp (rs6000_abi_name, "sysv-noeabi"))			\
+     {									\
+       rs6000_current_abi = ABI_V4;					\
 diff -u -r gcc-4.1.0-orig/gcc/toplev.h gcc-4.1.0/gcc/toplev.h
 --- gcc-4.1.0-orig/gcc/toplev.h	2005-09-08 17:47:05.000000000 -0700
 +++ gcc-4.1.0/gcc/toplev.h	2024-11-05 19:49:36.523930775 -0800

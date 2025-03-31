@@ -118,50 +118,6 @@ ProcessRelocSections
     return relocData;
 }
 
-std::pair<std::string, std::string> MakeEntryPointObjectFile
-(bool verbose,
- const std::string &installdir,
- const std::string &code_ep)
-{
-    auto pid = getpid();
-    auto tmp_env = getenv("TMP");
-    auto tmpdir = std::string(tmp_env ? tmp_env : ".");
-    std::ostringstream tmpfile;
-    tmpfile << tmpdir << "/" << "entrypoint_" << pid << ".s";
-    std::ostringstream objfile;
-    objfile << tmpdir << "/" << "entrypoint_" << pid << ".o";
-    std::ostringstream entry_sym;
-    entry_sym << "_entry_desc_" << pid;
-
-    {
-        auto tmp_s = std::ofstream(tmpfile.str().c_str());
-        tmp_s << "  .text\n";
-        tmp_s << "  .globl " << code_ep << "\n";
-        tmp_s << "  .globl " << entry_sym.str() << "\n";
-        tmp_s << entry_sym.str() << ":\n";
-        // Second entry? should point to toc in future.  Might be possible
-        tmp_s << "  .long " << code_ep << "\n";
-        for (auto i = 0; i < 4; i++) {
-            tmp_s << "  .long 0\n";
-        }
-    }
-
-    std::vector<std::string> run_compile;
-    std::string compiler = installdir + "/bin/powerpcle-unknown-elf-as";
-    run_compile.push_back(compiler);
-    run_compile.push_back("-mlittle");
-    run_compile.push_back("-o");
-    run_compile.push_back(objfile.str());
-    run_compile.push_back(tmpfile.str());
-
-    if (execute_command(verbose, run_compile) != 0) {
-        fprintf(stderr, "failed to create entry point struct\n");
-        exit(1);
-    }
-
-    return std::make_pair(objfile.str(), entry_sym.str());
-}
-
 int main( int argc, char **argv ) {
     bool verbose = false, nostdlib = false,
         nostartfiles = false, compile_only = false, is_dll = false, entry,
@@ -221,9 +177,6 @@ int main( int argc, char **argv ) {
     {
         // Generate an object file that names the entry point and override the normal entry
         // point.
-        auto object_file = MakeEntryPointObjectFile(verbose, installdir, entry_point);
-        entry_point = object_file.second;
-        gcc_args_str.push_back(object_file.first);
         gcc_args_str.push_back(std::string("-Wl,--entry=") + entry_point);
         gcc_args_str.push_back(std::string("-Wl,--undefined=") + entry_point);
         if (!nostartfiles) {
@@ -250,6 +203,7 @@ int main( int argc, char **argv ) {
     gcc_args_str.insert(gcc_args_str.begin(),"-nostdlib");
     gcc_args_str.insert(gcc_args_str.begin(),"-nostartfiles");
     gcc_args_str.insert(gcc_args_str.begin(),"-mlittle-endian");
+    gcc_args_str.insert(gcc_args_str.begin(),"-mwinnt");
     // Add necessary definitions but allow overrides
     possibly_define(gcc_args_str,"_M_PPC");
     possibly_define(gcc_args_str,"_PPC_");
