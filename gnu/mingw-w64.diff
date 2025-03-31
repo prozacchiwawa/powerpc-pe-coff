@@ -1,3 +1,39 @@
+diff --git a/mingw-w64-crt/Makefile.am b/mingw-w64-crt/Makefile.am
+index e727e649..9bf83b1e 100644
+--- a/mingw-w64-crt/Makefile.am
++++ b/mingw-w64-crt/Makefile.am
+@@ -1146,7 +1146,19 @@ lib64_DATA += lib64/libmsvcp60.a lib64/libmsvcr80.a lib64/libmsvcr90.a lib64/lib
+ 			  lib64/libmsvcr120_app.a lib64/libmsvcp120_app.a
+ endif
+ 
+-lib64/libcrtdll.a lib64/libmsvcr80.a: lib64/lib%.a: lib64/%.def
++src_crtdll=\
++  crt/crtdll_compat.c \
++  misc/___mb_cur_max_func.c \
++  misc/__p___argv.c \
++  misc/__p__acmdln.c \
++  misc/__p__commode.c \
++  misc/__p__fmode.c \
++  misc/__set_app_type.c \
++  misc/invalid_parameter_handler.c \
++  misc/lc_locale_func.c \
++  stdio/mingw_lock.c
++
++lib64/libcrtdll.a lib64/libmsvcr80.a: lib64/lib%.a: lib64/%.def lib32/libcrtdll_extra.a
+ 	$(DTDEF64) $< --dllname $*.dll
+ 
+ lib64/lib%.a: lib64/%.def
+@@ -1465,6 +1477,10 @@ dist_libsrc_DATA = \
+ noinst_HEADERS = libsrc/dxerr.c \
+  include/internal.h include/oscalls.h include/sect_attribs.h
+ 
++noinst_LIBRARIES += lib32/libcrtdll_extra.a
++
++lib32_libcrtdll_extra_a_SOURCES = $(src_crtdll)
++lib32_libcrtdll_extra_a_CPPFLAGS = $(CPPFLAGS32) -D__LIBMSVCRT__ $(extra_include) $(sysincludes)
+ 
+ # Cleaning options
+ #
 diff --git a/mingw-w64-crt/crt/CRT_fp10.c b/mingw-w64-crt/crt/CRT_fp10.c
 index 41cb5739..023dc37e 100644
 --- a/mingw-w64-crt/crt/CRT_fp10.c
@@ -12,8 +48,87 @@ index 41cb5739..023dc37e 100644
  #else
  #ifdef __GNUC__
    __asm__ ("fninit");
+diff --git a/mingw-w64-crt/crt/atonexit.c b/mingw-w64-crt/crt/atonexit.c
+index 2bb2edbd..02b1fd5a 100644
+--- a/mingw-w64-crt/crt/atonexit.c
++++ b/mingw-w64-crt/crt/atonexit.c
+@@ -25,7 +25,11 @@ _PVFV *__onexitbegin;
+ _PVFV *__onexitend;
+ 
+ extern _CRTIMP _onexit_t __dllonexit (_onexit_t, _PVFV**, _PVFV**);
++#ifdef _PPC_
++extern _onexit_t _onexit(_onexit_t func);
++#else
+ extern _onexit_t (__cdecl * __MINGW_IMP_SYMBOL(_onexit)) (_onexit_t func);
++#endif
+ 
+ /* Choose a different name to prevent name conflicts. The CRT one works fine.  */
+ _onexit_t __cdecl mingw_onexit(_onexit_t func);
+@@ -38,13 +42,22 @@ _onexit_t __cdecl mingw_onexit(_onexit_t func)
+ 
+   onexitbegin = (_PVFV *) _decode_pointer (__onexitbegin);
+ 
+-  if (onexitbegin == (_PVFV *) -1)
++  if (onexitbegin == (_PVFV *) -1) {
++#ifdef _PPC_
++    return 0; /* _onexit(func); */
++#else
+     return (* __MINGW_IMP_SYMBOL(_onexit)) (func);
++#endif
++  }
+   _lock (_EXIT_LOCK1);
+   onexitbegin = (_PVFV *) _decode_pointer (__onexitbegin);
+   onexitend = (_PVFV *) _decode_pointer (__onexitend);
+-  
++
++#ifdef _PPC_
++  retval = 0; /*__dllonexit (func, &onexitbegin, &onexitend);*/
++#else
+   retval = __dllonexit (func, &onexitbegin, &onexitend);
++#endif
+ 
+   __onexitbegin = (_PVFV *) _encode_pointer (onexitbegin);
+   __onexitend = (_PVFV *) _encode_pointer (onexitend);
+diff --git a/mingw-w64-crt/crt/crtdll_compat.c b/mingw-w64-crt/crt/crtdll_compat.c
+new file mode 100644
+index 00000000..9bb48bd8
+--- /dev/null
++++ b/mingw-w64-crt/crt/crtdll_compat.c
+@@ -0,0 +1,32 @@
++/**
++ * This file has no copyright assigned and is placed in the Public Domain.
++ * This file is part of the mingw-w64 runtime package.
++ * No warranty is given; refer to the file DISCLAIMER.PD within this package.
++ */
++
++#include <internal.h>
++#include <math.h>
++
++/* Define __initenv and __winitenv as crtdll.dll does not provide them */
++static char ** local__initenv;
++static wchar_t ** local__winitenv;
++char *** __MINGW_IMP_SYMBOL(__initenv) = &local__initenv;
++wchar_t *** __MINGW_IMP_SYMBOL(__winitenv) = &local__winitenv;
++
++/* Define dummy __setusermatherr() function as crtdll.dll does not provide it */
++#undef __setusermatherr
++void __setusermatherr(__UNUSED_PARAM(int (__cdecl *f)(struct _exception *))) { }
++
++/* Define dummy _lock() and _unlock() functions as crtdll.dll does not provide them */
++void __cdecl _lock(int locknum);
++void __cdecl _unlock(int locknum);
++void __cdecl _lock(__UNUSED_PARAM(int locknum)) { }
++void __cdecl _unlock(__UNUSED_PARAM(int locknum)) { }
++
++/* Define __getmainargs() function via crtdll.dll __GetMainArgs() function */
++extern void __GetMainArgs(int *argc, char ***argv, char ***envp, int expand_wildcards);
++int __cdecl __getmainargs(int *argc, char ***argv, char ***envp, int expand_wildcards, __UNUSED_PARAM(_startupinfo *startup_info))
++{
++  __GetMainArgs(argc, argv, envp, expand_wildcards);
++  return 0;
++}
 diff --git a/mingw-w64-crt/crt/crtexe.c b/mingw-w64-crt/crt/crtexe.c
-index ae37e0fe..335d9a35 100644
+index ae37e0fe..8bf715c3 100644
 --- a/mingw-w64-crt/crt/crtexe.c
 +++ b/mingw-w64-crt/crt/crtexe.c
 @@ -21,6 +21,10 @@
@@ -42,7 +157,66 @@ index ae37e0fe..335d9a35 100644
  /* TLS initialization hook.  */
  extern const PIMAGE_TLS_CALLBACK __dyn_tls_init_callback;
  
-@@ -208,7 +220,9 @@ int mainCRTStartup (void)
+@@ -125,16 +137,25 @@ __mingw_invalidParameterHandler (const wchar_t * __UNUSED_PARAM_1(expression),
+ static int __cdecl
+ pre_c_init (void)
+ {
++  Emote("pre_c_init!");
+   managedapp = check_managed_app ();
+-  if (mingw_app_type)
++  Emote("managedapp");
++  if (mingw_app_type) {
++    Emote("__set_app_type(_GUI_APP)");
+     __set_app_type(_GUI_APP);
+-  else
++  } else {
++    Emote("__set_app_type(_CONSOLE_APP)");
+     __set_app_type (_CONSOLE_APP);
++  }
++  Emote("_encode_pointer");
+   __onexitbegin = __onexitend = (_PVFV *) _encode_pointer ((_PVFV *)(-1));
+ 
++  Emote("_fmode");
+   * __MINGW_IMP_SYMBOL(_fmode) = _fmode;
++  Emote("_commode");
+   * __MINGW_IMP_SYMBOL(_commode) = _commode;
+ 
++  Emote("_setargv");
+ #ifdef WPRFLAG
+   _wsetargv();
+ #else
+@@ -142,25 +163,30 @@ pre_c_init (void)
+ #endif
+   if (_MINGW_INSTALL_DEBUG_MATHERR == 1)
+     {
++      Emote("__setusermatherr");
+       __setusermatherr (_matherr);
+     }
+ 
+   if (__globallocalestatus == -1)
+     {
+     }
++  Emote("done pre_c_init");
+   return 0;
+ }
+ 
+ static void __cdecl
+ pre_cpp_init (void)
+ {
++  Emote("pre_cpp_init");
+   startinfo.newmode = _newmode;
+ 
++  Emote("__getmainargs");
+ #ifdef WPRFLAG
+   argret = __wgetmainargs(&argc,&argv,&envp,_dowildcard,&startinfo);
+ #else
+   argret = __getmainargs(&argc,&argv,&envp,_dowildcard,&startinfo);
+ #endif
++  Emote("done pre_cpp_init");
+ }
+ 
+ static int __tmainCRTStartup (void);
+@@ -208,7 +234,9 @@ int mainCRTStartup (void)
      );
  #endif
    mingw_app_type = 0;
@@ -52,7 +226,7 @@ index ae37e0fe..335d9a35 100644
    ret = __tmainCRTStartup ();
  #if defined(__SEH__) && !defined(__clang__)
    asm ("\tnop\n"
-@@ -217,6 +231,50 @@ int mainCRTStartup (void)
+@@ -217,6 +245,79 @@ int mainCRTStartup (void)
    return ret;
  }
  
@@ -69,6 +243,16 @@ index ae37e0fe..335d9a35 100644
 +    n <<= 4;
 +  }
 +  buf[8] = 0;
++}
++
++void EmoteNumber(const char *msg, DWORD value)
++{
++  char buf[10];
++  HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
++  FormatNumber(buf, value);
++  WriteString(h, msg);
++  WriteString(h, buf);
++  WriteString(h, "\n");
 +}
 +
 +void Dump(const char *msg, struct NameAndValue *dump)
@@ -100,10 +284,29 @@ index ae37e0fe..335d9a35 100644
 +  Dump("AddNV", nv);
 +}
 +
++void CallTlsStartup() {
++  if (__dyn_tls_init_callback != NULL) {
++    __dyn_tls_init_callback (NULL, DLL_THREAD_ATTACH, NULL);
++  }
++}
++
++#ifdef _PPC_
++static _invalid_parameter_handler invalid_parameter_handler = NULL;
++
++_invalid_parameter_handler CDECL _set_invalid_parameter_handler
++(_invalid_parameter_handler handler)
++{
++  _invalid_parameter_handler old = invalid_parameter_handler;
++
++  invalid_parameter_handler = handler;
++  return old;
++}
++#endif
++
  static
  __declspec(noinline) int
  __tmainCRTStartup (void)
-@@ -224,6 +282,9 @@ __tmainCRTStartup (void)
+@@ -224,6 +325,9 @@ __tmainCRTStartup (void)
    _TCHAR *lpszCommandLine = NULL;
    STARTUPINFO StartupInfo;
    WINBOOL inDoubleQuote = FALSE;
@@ -113,7 +316,7 @@ index ae37e0fe..335d9a35 100644
    memset (&StartupInfo, 0, sizeof (STARTUPINFO));
  
  #if defined(__i386__) || defined(_X86_)
-@@ -239,63 +300,96 @@ __tmainCRTStartup (void)
+@@ -239,63 +343,94 @@ __tmainCRTStartup (void)
  
    if (mingw_app_type)
      GetStartupInfo (&StartupInfo);
@@ -173,15 +376,14 @@ index ae37e0fe..335d9a35 100644
        (VOID)InterlockedExchangePointer ((volatile PVOID *) &__native_startup_lock, 0);
 -    
 -    if (__dyn_tls_init_callback != NULL)
+-      __dyn_tls_init_callback (NULL, DLL_THREAD_ATTACH, NULL);
+-    
 +      Emote("after give up lock");
 +    }
 +
-+    if (__dyn_tls_init_callback != NULL) {
-+      Emote("before __dyn_tls_init_callback");
-       __dyn_tls_init_callback (NULL, DLL_THREAD_ATTACH, NULL);
--    
-+      Emote("after __dyn_tls_init_callback");
-+    }
++    Emote("before __dyn_tls_init_callback");
++    CallTlsStartup();
++    Emote("after __dyn_tls_init_callback");
 +
 +    Emote("before _pei386_runtime_relocator");
      _pei386_runtime_relocator ();
@@ -215,7 +417,7 @@ index ae37e0fe..335d9a35 100644
  	while (*lpszCommandLine > SPACECHAR || (*lpszCommandLine && inDoubleQuote))
  	  {
  	    if (*lpszCommandLine == DQUOTECHAR)
-@@ -320,8 +414,11 @@ __tmainCRTStartup (void)
+@@ -320,8 +455,11 @@ __tmainCRTStartup (void)
  	__mingw_winmain_nShowCmd = StartupInfo.dwFlags & STARTF_USESHOWWINDOW ?
  				    StartupInfo.wShowWindow : SW_SHOWDEFAULT;
        }
@@ -227,7 +429,7 @@ index ae37e0fe..335d9a35 100644
  #ifdef WPRFLAG
      __winitenv = envp;
      /* C++ initialization.
-@@ -331,7 +428,9 @@ __tmainCRTStartup (void)
+@@ -331,7 +469,9 @@ __tmainCRTStartup (void)
  #ifndef __arm__
      __initenv = envp;
  #endif
@@ -237,6 +439,43 @@ index ae37e0fe..335d9a35 100644
  #endif
      if (!managedapp)
        exit (mainret);
+@@ -350,6 +490,7 @@ extern int mingw_initcharmax;
+ static int __cdecl
+ check_managed_app (void)
+ {
++  char buf[10];
+   PIMAGE_DOS_HEADER pDOSHeader;
+   PIMAGE_NT_HEADERS pPEHeader;
+   PIMAGE_OPTIONAL_HEADER32 pNTHeader32;
+@@ -361,15 +502,20 @@ check_managed_app (void)
+   mingw_initltssuo_force=1;
+   mingw_initcharmax=1;
+ 
++  EmoteNumber("__ImageBase ", (DWORD)&__ImageBase);
+   pDOSHeader = (PIMAGE_DOS_HEADER) &__ImageBase;
+   if (pDOSHeader->e_magic != IMAGE_DOS_SIGNATURE)
+     return 0;
+ 
+   pPEHeader = (PIMAGE_NT_HEADERS)((char *)pDOSHeader + pDOSHeader->e_lfanew);
++  EmoteNumber("pPEHeader ", (DWORD)pPEHeader);
+   if (pPEHeader->Signature != IMAGE_NT_SIGNATURE)
+     return 0;
+ 
+   pNTHeader32 = (PIMAGE_OPTIONAL_HEADER32) &pPEHeader->OptionalHeader;
++  EmoteNumber("pNTHeader32 ", (DWORD)pNTHeader32);
++  EmoteNumber("pNTHeader32->Magic ", (DWORD)pNTHeader32->Magic);
++
+   switch (pNTHeader32->Magic)
+     {
+     case IMAGE_NT_OPTIONAL_HDR32_MAGIC:
+@@ -382,6 +528,7 @@ check_managed_app (void)
+ 	return 0;
+       return !! pNTHeader64->DataDirectory[IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR].VirtualAddress;
+     }
++  Emote("check_managed_app done");
+   return 0;
+ }
+ 
 diff --git a/mingw-w64-crt/crt/merr.c b/mingw-w64-crt/crt/merr.c
 index f3dff580..d6e1ddcb 100644
 --- a/mingw-w64-crt/crt/merr.c
@@ -267,6 +506,17 @@ index 77092080..320f8228 100644
  #endif
    va_end (argp);
    abort ();
+diff --git a/mingw-w64-crt/crt/xtxtmode.c b/mingw-w64-crt/crt/xtxtmode.c
+index dcbbe118..f4db494f 100644
+--- a/mingw-w64-crt/crt/xtxtmode.c
++++ b/mingw-w64-crt/crt/xtxtmode.c
+@@ -3,4 +3,6 @@
+  * This file is part of the mingw-w64 runtime package.
+  * No warranty is given; refer to the file DISCLAIMER.PD within this package.
+  */
++#ifndef _PPC_
+ int _fmode = 0;
++#endif
 diff --git a/mingw-w64-crt/include/internal.h b/mingw-w64-crt/include/internal.h
 index e2f2d596..1c1958f9 100644
 --- a/mingw-w64-crt/include/internal.h
@@ -498,6 +748,126 @@ index 8e5dc6ea..0c8922e3 100644
  #include <intrin.h>
 +
 +#endif
+diff --git a/mingw-w64-crt/lib32/crtdll.def b/mingw-w64-crt/lib32/crtdll.def
+index 1c73001d..caed52d8 100644
+--- a/mingw-w64-crt/lib32/crtdll.def
++++ b/mingw-w64-crt/lib32/crtdll.def
+@@ -190,10 +190,13 @@ _CIsqrt
+ _CItan
+ _CItanh
+ _HUGE_dll DATA
++_HUGE DATA == _HUGE_dll
+ _XcptFilter
+ __GetMainArgs
+ __argc_dll DATA
++__argc DATA == __argc_dll
+ __argv_dll DATA
++__argv DATA == __argv_dll
+ __dllonexit
+ __doserrno
+ __fpecode
+@@ -201,6 +204,7 @@ __isascii
+ __iscsym
+ __iscsymf
+ __mb_cur_max_dll DATA
++__mb_cur_max DATA == __mb_cur_max_dll
+ __pxcptinfoptrs
+ __threadhandle
+ __threadid
+@@ -208,7 +212,9 @@ __toascii
+ _abnormal_termination
+ _access
+ _acmdln_dll DATA
++_acmdln DATA == _acmdln_dll
+ _aexit_rtn_dll DATA
++_aexit_rtn DATA == _aexit_rtn_dll
+ _amsg_exit
+ _assert
+ _basemajor_dll DATA
+@@ -229,6 +235,7 @@ _clearfp
+ _close
+ _commit
+ _commode_dll DATA
++_commode DATA == _commode_dll
+ _control87
+ _controlfp
+ _copysign
+@@ -240,11 +247,13 @@ _cscanf
+ _ctype
+ _cwait
+ _daylight_dll DATA
++_daylight DATA == _daylight_dll
+ _dup
+ _dup2
+ _ecvt
+ _endthread
+ _environ_dll DATA
++_environ DATA == _environ_dll
+ _eof
+ _errno
+ _except_handler2
+@@ -265,6 +274,7 @@ _fgetchar
+ _fgetwchar
+ _filbuf
+ _fileinfo_dll DATA
++_fileinfo DATA == _fileinfo_dll
+ _filelength
+ _fileno
+ _findclose
+@@ -274,6 +284,7 @@ _finite
+ _flsbuf
+ _flushall
+ _fmode_dll DATA
++_fmode DATA == _fmode_dll
+ _fpclass
+ _fpieee_flt
+ _fpreset DATA
+@@ -415,10 +426,13 @@ _osmajor_dll DATA
+ _osminor_dll DATA
+ _osmode_dll DATA
+ _osver_dll DATA
++_osver DATA == _osver_dll
+ _osversion_dll DATA
+ _pclose
+ _pctype_dll DATA
++_pctype DATA == _pctype_dll
+ _pgmptr_dll DATA
++_pgmptr DATA == _pgmptr_dll
+ _pipe
+ _popen
+ _purecall
+@@ -426,6 +440,7 @@ _putch
+ _putenv
+ _putw
+ _pwctype_dll DATA
++_pwctype DATA == _pwctype_dll
+ _read
+ _rmdir
+ _rmtmp
+@@ -474,9 +489,11 @@ _strupr
+ _swab
+ _sys_errlist DATA
+ _sys_nerr_dll DATA
++_sys_nerr DATA == _sys_nerr_dll
+ _tell
+ _tempnam
+ _timezone_dll DATA
++_timezone DATA == _timezone_dll
+ _tolower
+ _toupper
+ _tzname DATA
+@@ -499,8 +516,11 @@ _wcsrev
+ _wcsset
+ _wcsupr
+ _winmajor_dll DATA
++_winmajor DATA == _winmajor_dll
+ _winminor_dll DATA
++_winminor DATA == _winminor_dll
+ _winver_dll DATA
++_winver DATA == _winver_dll
+ _write
+ _wtoi
+ _wtol
 diff --git a/mingw-w64-crt/math/_chgsignl.S b/mingw-w64-crt/math/_chgsignl.S
 index 38764657..57400476 100644
 --- a/mingw-w64-crt/math/_chgsignl.S

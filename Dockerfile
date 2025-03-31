@@ -52,3 +52,9 @@ RUN (PATH="${PATH}:/build/ovr:/build/bin" && cd gnu/mingw-w64 && CFLAGS="-I/buil
 RUN mkdir -p /build/lib/mingw-w64-headers/sdks && touch /build/lib/mingw-w64-headers/sdks/_mingw_directx.h /build/lib/mingw-w64-headers/sdks/_mingw_ddk.h
 RUN mkdir -p gnu/mingw-w64/mingw-w64-crt/lib32
 RUN (PATH="${PATH}:/build/ovr:/build/bin" && cd gnu/mingw-w64 && make CC=powerpcle-unknown-elf-gcc AR=powerpcle-unknown-elf-ar RANLIB=powerpcle-unknown-elf-ranlib CFLAGS="-I/build/lib/mingw-w64-headers/direct-x/include/" DLLTOOL=powerpcle-unknown-elf-dlltool CCAS="powerpcle-unknown-elf-gcc -D__powerpc__" DLLTOOLFLAGS32="" LD=powerpcle-unknown-elf-ld AS=powerpcle-unknown-elf-as install)
+RUN cp /build/lib32/libcrtdll.a /build/lib32/libcrtdll_save_mingw.a
+RUN cp /build/lib32/libmsvcrt.a /build/lib32/libmsvcrt_save_mingw.a
+ADD gnu/crtdll.def /rosbe/gnu
+RUN (PATH="${PATH}:/build/ovr:/build/bin" && powerpcle-unknown-elf-dlltool -d gnu/crtdll.def -l /build/lib32/libcrtdll.a)
+ADD gnu/msvcrt.def /rosbe/gnu
+RUN (PATH="${PATH}:/build/ovr:/build/bin" && powerpcle-unknown-elf-dlltool -d gnu/msvcrt.def -l /build/lib32/libmsvcrt.a)

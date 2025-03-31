@@ -1,6 +1,6 @@
 diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/rs6000.c gcc-4.1.0/gcc/config/rs6000/rs6000.c
 --- gcc-4.1.0-orig/gcc/config/rs6000/rs6000.c	2006-02-10 12:58:33.000000000 -0800
-+++ gcc-4.1.0/gcc/config/rs6000/rs6000.c	2025-03-30 21:25:08.646234905 -0700
++++ gcc-4.1.0/gcc/config/rs6000/rs6000.c	2025-03-31 01:11:52.702106712 -0700
 @@ -3565,7 +3565,7 @@
  
    /* The TOC register is not killed across calls in a way that is
@@ -56,7 +56,44 @@ diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/rs6000.c gcc-4.1.0/gcc/config/rs6000
  	{
  	  const char *name = XSTR (x, 0);
  	  while (*name == '.')
-@@ -18077,27 +18083,39 @@
+@@ -17183,8 +17189,9 @@
+   enum machine_mode pmode = Pmode;
+   int regsize = (TARGET_32BIT) ? 4 : 8;
+   rtx ctx_reg = force_reg (pmode, cxt);
++  int is_winnt = (target_flags & MASK_WINNT) ? 0x80000000 : 0;
+ 
+-  switch (DEFAULT_ABI)
++  switch (is_winnt ? is_winnt : DEFAULT_ABI)
+     {
+     default:
+       gcc_unreachable ();
+@@ -17197,17 +17204,18 @@
+     /* Under AIX, just build the 3 word function descriptor */
+     case ABI_AIX:
+       {
+-	rtx fn_reg = gen_reg_rtx (pmode);
+-	rtx toc_reg = gen_reg_rtx (pmode);
+-	emit_move_insn (fn_reg, MEM_DEREF (fnaddr));
+-	emit_move_insn (toc_reg, MEM_PLUS (fnaddr, regsize));
+-	emit_move_insn (MEM_DEREF (addr), fn_reg);
+-	emit_move_insn (MEM_PLUS (addr, regsize), toc_reg);
+-	emit_move_insn (MEM_PLUS (addr, 2*regsize), ctx_reg);
++        rtx fn_reg = gen_reg_rtx (pmode);
++        rtx toc_reg = gen_reg_rtx (pmode);
++        emit_move_insn (fn_reg, MEM_DEREF (fnaddr));
++        emit_move_insn (toc_reg, MEM_PLUS (fnaddr, regsize));
++        emit_move_insn (MEM_DEREF (addr), fn_reg);
++        emit_move_insn (MEM_PLUS (addr, regsize), toc_reg);
++        emit_move_insn (MEM_PLUS (addr, 2*regsize), ctx_reg);
+       }
+       break;
+ 
+     /* Under V.4/eabi/darwin, __trampoline_setup does the real work.  */
++    case 0x80000000:
+     case ABI_DARWIN:
+     case ABI_V4:
+       emit_library_call (gen_rtx_SYMBOL_REF (SImode, "__trampoline_setup"),
+@@ -18077,27 +18085,39 @@
    ASM_OUTPUT_TYPE_DIRECTIVE (file, name, "function");
    ASM_DECLARE_RESULT (file, DECL_RESULT (decl));
  
@@ -106,7 +143,7 @@ diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/rs6000.c gcc-4.1.0/gcc/config/rs6000
  static void
 diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/rs6000.h gcc-4.1.0/gcc/config/rs6000/rs6000.h
 --- gcc-4.1.0-orig/gcc/config/rs6000/rs6000.h	2006-02-10 12:58:33.000000000 -0800
-+++ gcc-4.1.0/gcc/config/rs6000/rs6000.h	2025-03-30 18:46:22.415155342 -0700
++++ gcc-4.1.0/gcc/config/rs6000/rs6000.h	2025-03-31 00:01:36.727533592 -0700
 @@ -1237,9 +1237,11 @@
    ABI_NONE,
    ABI_AIX,			/* IBM's AIX */
@@ -120,6 +157,56 @@ diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/rs6000.h gcc-4.1.0/gcc/config/rs6000
  extern enum rs6000_abi rs6000_current_abi;	/* available for use by subtarget */
  
  /* Define this if pushing a word on the stack
+@@ -3072,4 +3074,3 @@
+ 
+ extern GTY(()) tree rs6000_builtin_types[RS6000_BTI_MAX];
+ extern GTY(()) tree rs6000_builtin_decls[RS6000_BUILTIN_COUNT];
+-
+diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/rs6000.md gcc-4.1.0/gcc/config/rs6000/rs6000.md
+--- gcc-4.1.0-orig/gcc/config/rs6000/rs6000.md	2006-02-19 11:31:22.000000000 -0800
++++ gcc-4.1.0/gcc/config/rs6000/rs6000.md	2025-03-31 02:29:30.553958110 -0700
+@@ -9951,19 +9951,6 @@
+ ;; variable argument function.  It is > 0 if FP registers were passed
+ ;; and < 0 if they were not.
+ 
+-(define_insn "*call_indirect_nonlocal_aix32"
+-  [(call (mem:SI (match_operand:SI 0 "register_operand" "c,*l"))
+-	 (match_operand 1 "" "g,g"))
+-   (use (reg:SI 2))
+-   (use (reg:SI 11))
+-   (set (reg:SI 2)
+-	(mem:SI (plus:SI (reg:SI 1) (const_int 20))))
+-   (clobber (match_scratch:SI 2 "=l,l"))]
+-  "TARGET_32BIT && DEFAULT_ABI == ABI_AIX"
+-  "b%T0l\;{l|lwz} 2,20(1)"
+-  [(set_attr "type" "jmpreg")
+-   (set_attr "length" "8")])
+-
+ (define_insn "*call_nonlocal_aix32"
+   [(call (mem:SI (match_operand:SI 0 "symbol_ref_operand" "s"))
+ 	 (match_operand 1 "" "g"))
+@@ -10069,13 +10056,20 @@
+   "DEFAULT_ABI == ABI_V4
+    || DEFAULT_ABI == ABI_DARWIN"
+ {
++  output_asm_insn("stw 31,-16(1)", operands);
++  output_asm_insn("stw 2,-12(1)", operands);
++  output_asm_insn("mfctr 31", operands);
++  output_asm_insn("lwz 2,4(31)", operands);
++  output_asm_insn("lwz 31,0(31)", operands);
++  output_asm_insn("mtctr 31", operands);
++  output_asm_insn("lwz 31,-16(1)", operands);
+   if (INTVAL (operands[2]) & CALL_V4_SET_FP_ARGS)
+     output_asm_insn ("crxor 6,6,6", operands);
+ 
+   else if (INTVAL (operands[2]) & CALL_V4_CLEAR_FP_ARGS)
+     output_asm_insn ("creqv 6,6,6", operands);
+ 
+-  return "b%T0l";
++  return "b%T0l;lwz 2,-12(1)";
+ }
+   [(set_attr "type" "jmpreg,jmpreg,jmpreg,jmpreg")
+    (set_attr "length" "4,4,8,8")])
 diff -u -r gcc-4.1.0-orig/gcc/config/rs6000/rs6000.opt gcc-4.1.0/gcc/config/rs6000/rs6000.opt
 --- gcc-4.1.0-orig/gcc/config/rs6000/rs6000.opt	2005-11-14 21:00:40.000000000 -0800
 +++ gcc-4.1.0/gcc/config/rs6000/rs6000.opt	2025-03-30 19:53:34.256492763 -0700

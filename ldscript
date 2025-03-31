@@ -36,6 +36,17 @@ SECTIONS
      *(.got*)
      *(.eh_frame)
      *(.sdata)
+  __CTOR_LIST__ = .;
+  KEEP (*(.ctors));
+  KEEP (*(.ctor));
+  KEEP (*(SORT_BY_NAME(.ctors.*)));
+  LONG (0); LONG (0);
+  __DTOR_LIST__ = .;
+  KEEP (*(.dtors));
+  KEEP (*(.dtor));
+  KEEP (*(SORT_BY_NAME(.dtors.*)));
+  LONG (0); LONG (0);
+
      . = ALIGN(4096);
   }
   .tls :

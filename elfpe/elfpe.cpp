@@ -231,7 +231,7 @@ int main( int argc, char **argv ) {
     {
         gcc_args_str.insert(gcc_args_str.begin(), "-Wl,-r");
         gcc_args_str.insert(gcc_args_str.begin(), "-Wl,-EL");
-        // gcc_args_str.insert(gcc_args_str.begin(), "-Wl,--start-group");
+        gcc_args_str.insert(gcc_args_str.begin(), "-Wl,--start-group");
         gcc_args_str.insert(gcc_args_str.begin(), std::string("-Wl,-T,") + mingw_lib_dir + "/ldscript");
         //gcc_args_str.insert(gcc_args_str.begin(), "-Wl,-shared,-Bsymbolic,-z,defs");
     }
@@ -254,7 +254,7 @@ int main( int argc, char **argv ) {
         }
         fprintf( stderr, "\n" );
     }
-    // if (!compile_only) gcc_args_str.insert(gcc_args_str.end(), "-Wl,--end-group");
+    if (!compile_only) gcc_args_str.insert(gcc_args_str.end(), "-Wl,--end-group");
 
     std::vector<section_mapping_t> sectionRvas;
     if ( !(status = execute_command( verbose, gcc_args_str )) && !compile_only && mkheader )
