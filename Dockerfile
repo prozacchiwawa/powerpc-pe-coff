@@ -6,7 +6,7 @@ WORKDIR /rosbe
 RUN ln -fs /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
 RUN apt-get update -y
 RUN apt-get install -y --no-install-recommends tzdata
-RUN apt-get install -y gcc g++ autoconf automake info git make libgmp-dev curl bzip2 libmpfr-dev ssh
+RUN apt-get install -y gcc g++ autoconf automake info git make libgmp-dev curl bzip2 libmpfr-dev ssh libelf-dev
 
 RUN mkdir -p gnu
 
@@ -28,10 +28,8 @@ COPY ldscript /rosbe
 COPY install.sh /rosbe
 RUN /bin/bash install.sh /build
 
-RUN (cd build/gcc-configure/gcc && CFLAGS_FOR_TARGET="-fPIE -mlittle" sh ../../../gnu/gcc-4.1.0/gcc/configure --target=powerpcle-unknown-elf --prefix=/build --disable-ssp --disable-threads --without-headers --disable-multilib --enable-languages=c)
 RUN (PATH="${PATH}:/build/bin" && cd build/gcc-configure/gcc && make && make install)
 
-RUN apt-get install -y libelf-dev
 ADD elfpe /rosbe/elfpe
 RUN make -C elfpe clean && make -C elfpe
 

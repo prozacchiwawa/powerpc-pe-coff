@@ -41,26 +41,25 @@ if [ ! -d build/gcc-configure ] ; then
     mkdir build/gcc-configure || exit 1
 fi
 export PATH="$idir/bin":$PATH
-cd build/gcc-configure || exit 1
+(cd build/gcc-configure &&
 
-CFLAGS="-Wno-implicit-int -Wno-implicit-function-declaration -Wno-unused-but-set-variable -Wno-pedantic -Wno-incompatible-pointer-types -Wno-expansion-to-defined -Wno-implicit-fallthrough -Wno-shift-negative-value" sh ../../gnu/gcc-4.1.0/configure \
+     CFLAGS="-Wno-implicit-int -Wno-implicit-function-declaration -Wno-unused-but-set-variable -Wno-pedantic -Wno-incompatible-pointer-types -Wno-expansion-to-defined -Wno-implicit-fallthrough -Wno-shift-negative-value" sh ../../gnu/gcc-4.1.0/configure \
       --prefix="$idir" \
       --target=powerpcle-unknown-elf \
       --disable-ssp \
       --disable-threads \
       --without-headers \
       --disable-multilib \
-      --enable-languages=c || exit 1
+      --enable-languages=c &&
 
-make configure-host
-make all-stage1-gcc
-make -C libiberty
-make -C libcpp
-make -C gcc cpp cc1 xgcc
+     make configure-host &&
+     make all-stage1-gcc &&
+     make -C libiberty &&
+     make -C libcpp &&
+     make -C gcc cpp cc1 xgcc
+)
 
-# make install || exit 1
-# cd ../..
-
+(cd build/gcc-configure/gcc && CFLAGS_FOR_TARGET="-fPIE -mlittle" sh ../../../gnu/gcc-4.1.0/gcc/configure --target=powerpcle-unknown-elf --prefix=/build --disable-ssp --disable-threads --without-headers --disable-multilib --enable-languages=c)
 # # Make elfpe
 # make -C elfpe && cp elfpe/elfpe ovr/powerpcle-unknown-elf-gcc || exit 1
 # # Make env script
