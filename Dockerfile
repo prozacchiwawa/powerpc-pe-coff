@@ -27,15 +27,12 @@ RUN (cd gnu/binutils-2.16.1 && patch -p1 < ../binutils-2.16.1.diff)
 COPY ldscript /rosbe
 COPY install.sh /rosbe
 ADD elfpe /rosbe/elfpe
+ADD gnu/crtdll.def /rosbe/gnu
+ADD gnu/msvcrt.def /rosbe/gnu
 
-RUN /bin/bash install.sh /build
+RUN /bin/bash install.sh /build binutils
+RUN /bin/bash install.sh /build gcc
+RUN /bin/bash install.sh /build mingw
+RUN /bin/bash install.sh /build finish
 
 ENV INSTALLDIR=/build
-
-RUN (PATH="${PATH}:/build/ovr:/build/bin" && cd gnu/mingw-w64 && make CC=powerpcle-unknown-elf-gcc AR=powerpcle-unknown-elf-ar RANLIB=powerpcle-unknown-elf-ranlib CFLAGS="-I/build/lib/mingw-w64-headers/direct-x/include/" DLLTOOL=powerpcle-unknown-elf-dlltool CCAS="powerpcle-unknown-elf-gcc -D__powerpc__" DLLTOOLFLAGS32="" LD=powerpcle-unknown-elf-ld AS=powerpcle-unknown-elf-as install)
-RUN cp /build/lib32/libcrtdll.a /build/lib32/libcrtdll_save_mingw.a
-RUN cp /build/lib32/libmsvcrt.a /build/lib32/libmsvcrt_save_mingw.a
-ADD gnu/crtdll.def /rosbe/gnu
-RUN (PATH="${PATH}:/build/ovr:/build/bin" && powerpcle-unknown-elf-dlltool -d gnu/crtdll.def -l /build/lib32/libcrtdll.a)
-ADD gnu/msvcrt.def /rosbe/gnu
-RUN (PATH="${PATH}:/build/ovr:/build/bin" && powerpcle-unknown-elf-dlltool -d gnu/msvcrt.def -l /build/lib32/libmsvcrt.a)
