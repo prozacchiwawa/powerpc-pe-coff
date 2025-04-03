@@ -1228,7 +1228,7 @@ diff -u -r binutils-2.16.1-orig/binutils/dlltool.c binutils-2.16.1/binutils/dllt
  
 diff -u -r binutils-2.16.1-orig/binutils/rescoff.c binutils-2.16.1/binutils/rescoff.c
 --- binutils-2.16.1-orig/binutils/rescoff.c	2003-09-14 05:20:16.000000000 -0700
-+++ binutils-2.16.1/binutils/rescoff.c	2025-04-02 01:46:13.750525934 -0700
++++ binutils-2.16.1/binutils/rescoff.c	2025-04-03 12:17:37.108863486 -0700
 @@ -442,6 +442,9 @@
  #elif defined DLLTOOL_ARM
    if (! bfd_set_arch_mach (abfd, bfd_arch_arm, 0))
@@ -1239,8 +1239,12 @@ diff -u -r binutils-2.16.1-orig/binutils/rescoff.c binutils-2.16.1/binutils/resc
  #else
    /* FIXME: This is obviously i386 specific.  */
    if (! bfd_set_arch_mach (abfd, bfd_arch_i386, 0))
-@@ -460,7 +463,24 @@
- 				| SEC_LOAD | SEC_DATA)))
+@@ -457,10 +460,27 @@
+ 
+   if (! bfd_set_section_flags (abfd, sec,
+ 			       (SEC_HAS_CONTENTS | SEC_ALLOC
+-				| SEC_LOAD | SEC_DATA)))
++				| SEC_LOAD | SEC_DATA | SEC_RELOC)))
      bfd_fatal ("bfd_set_section_flags");
  
 -  if (! bfd_set_symtab (abfd, sec->symbol_ptr_ptr, 1))
@@ -1265,6 +1269,14 @@ diff -u -r binutils-2.16.1-orig/binutils/rescoff.c binutils-2.16.1/binutils/resc
      bfd_fatal ("bfd_set_symtab");
  
    /* Requiring this is probably a bug in BFD.  */
+@@ -531,6 +551,7 @@
+   if (! bfd_set_section_size (abfd, sec, length))
+     bfd_fatal ("bfd_set_section_size");
+ 
++  sec->reloc_count = cwi.reloc_count;
+   bfd_set_reloc (abfd, sec, cwi.relocs, cwi.reloc_count);
+ 
+   offset = 0;
 diff -u -r binutils-2.16.1-orig/binutils/resres.c binutils-2.16.1/binutils/resres.c
 --- binutils-2.16.1-orig/binutils/resres.c	2005-03-03 03:46:12.000000000 -0800
 +++ binutils-2.16.1/binutils/resres.c	2024-11-05 19:10:26.022222108 -0800

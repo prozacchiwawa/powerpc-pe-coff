@@ -82,8 +82,10 @@ void SingleReloc
            ELF32_R_TYPE(reloc.r_info), ELF32_R_SYM(reloc.r_info));
 #endif
 
-    auto targetSection = eof.getSection(symbol.st_shndx);
-    if (targetSection && targetSection.getName() == ".rsrc") {
+    auto resource = false;
+    uint32_t dataOffset;
+    if (target.getName() == ".rsrc") {
+        resource = true;
         printf("RSRC: offset %08x info %08x addend %08x [%02x %06x]\n",
                reloc.r_offset, reloc.r_info, reloc.r_addend,
                ELF32_R_TYPE(reloc.r_info), ELF32_R_SYM(reloc.r_info));
@@ -129,7 +131,12 @@ void SingleReloc
         break;
     case R_PPC_UADDR32: /* Special: Treat as RVA */
         printf("UADDR32 S %08x A %08x P %08x\n", S, A, P);
-        le32write(Target, S + A - imageBase);
+        if (resource) {
+            dataOffset = le32read(Target);
+        } else {
+            dataOffset = 0;
+        }
+        le32write(Target, S + A - imageBase + dataOffset);
         break;
     case R_PPC_REL24:
         //printf("REL24 S %08x A %08x P %08x\n", S, A, P);
