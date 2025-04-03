@@ -1228,7 +1228,7 @@ diff -u -r binutils-2.16.1-orig/binutils/dlltool.c binutils-2.16.1/binutils/dllt
  
 diff -u -r binutils-2.16.1-orig/binutils/rescoff.c binutils-2.16.1/binutils/rescoff.c
 --- binutils-2.16.1-orig/binutils/rescoff.c	2003-09-14 05:20:16.000000000 -0700
-+++ binutils-2.16.1/binutils/rescoff.c	2024-11-05 19:10:26.021222088 -0800
++++ binutils-2.16.1/binutils/rescoff.c	2025-04-02 01:46:13.750525934 -0700
 @@ -442,6 +442,9 @@
  #elif defined DLLTOOL_ARM
    if (! bfd_set_arch_mach (abfd, bfd_arch_arm, 0))
@@ -1239,6 +1239,32 @@ diff -u -r binutils-2.16.1-orig/binutils/rescoff.c binutils-2.16.1/binutils/resc
  #else
    /* FIXME: This is obviously i386 specific.  */
    if (! bfd_set_arch_mach (abfd, bfd_arch_i386, 0))
+@@ -460,7 +463,24 @@
+ 				| SEC_LOAD | SEC_DATA)))
+     bfd_fatal ("bfd_set_section_flags");
+ 
+-  if (! bfd_set_symtab (abfd, sec->symbol_ptr_ptr, 1))
++  int num_symbols = 2;
++  asymbol **symbol_ptrs = (asymbol **)calloc(num_symbols + 1, sizeof(asymbol *));
++  // Allocate each symbol independently with bfd_make_empty_symbol
++  for (int i = 0; i < num_symbols; i++) {
++    symbol_ptrs[i] = bfd_make_empty_symbol(abfd);
++  }
++
++  symbol_ptrs[0]->name = strdup(".rsrc");
++  symbol_ptrs[0]->section = sec;
++  symbol_ptrs[0]->flags = BSF_GLOBAL;
++  symbol_ptrs[0]->value = 0;
++
++  symbol_ptrs[1]->name = strdup("__resource_header__");
++  symbol_ptrs[1]->section = sec;
++  symbol_ptrs[1]->flags = BSF_LOCAL;
++  symbol_ptrs[1]->value = 0;
++
++  if (! bfd_set_symtab (abfd, symbol_ptrs, num_symbols))
+     bfd_fatal ("bfd_set_symtab");
+ 
+   /* Requiring this is probably a bug in BFD.  */
 diff -u -r binutils-2.16.1-orig/binutils/resres.c binutils-2.16.1/binutils/resres.c
 --- binutils-2.16.1-orig/binutils/resres.c	2005-03-03 03:46:12.000000000 -0800
 +++ binutils-2.16.1/binutils/resres.c	2024-11-05 19:10:26.022222108 -0800
