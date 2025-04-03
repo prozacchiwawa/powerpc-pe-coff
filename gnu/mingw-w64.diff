@@ -49,7 +49,7 @@ index 41cb5739..023dc37e 100644
  #ifdef __GNUC__
    __asm__ ("fninit");
 diff --git a/mingw-w64-crt/crt/atonexit.c b/mingw-w64-crt/crt/atonexit.c
-index 2bb2edbd..02b1fd5a 100644
+index 2bb2edbd..8f0f2bc0 100644
 --- a/mingw-w64-crt/crt/atonexit.c
 +++ b/mingw-w64-crt/crt/atonexit.c
 @@ -25,7 +25,11 @@ _PVFV *__onexitbegin;
@@ -64,31 +64,22 @@ index 2bb2edbd..02b1fd5a 100644
  
  /* Choose a different name to prevent name conflicts. The CRT one works fine.  */
  _onexit_t __cdecl mingw_onexit(_onexit_t func);
-@@ -38,13 +42,22 @@ _onexit_t __cdecl mingw_onexit(_onexit_t func)
+@@ -38,12 +42,13 @@ _onexit_t __cdecl mingw_onexit(_onexit_t func)
  
    onexitbegin = (_PVFV *) _decode_pointer (__onexitbegin);
  
 -  if (onexitbegin == (_PVFV *) -1)
 +  if (onexitbegin == (_PVFV *) -1) {
-+#ifdef _PPC_
-+    return 0; /* _onexit(func); */
-+#else
      return (* __MINGW_IMP_SYMBOL(_onexit)) (func);
-+#endif
 +  }
    _lock (_EXIT_LOCK1);
    onexitbegin = (_PVFV *) _decode_pointer (__onexitbegin);
    onexitend = (_PVFV *) _decode_pointer (__onexitend);
 -  
 +
-+#ifdef _PPC_
-+  retval = 0; /*__dllonexit (func, &onexitbegin, &onexitend);*/
-+#else
    retval = __dllonexit (func, &onexitbegin, &onexitend);
-+#endif
  
    __onexitbegin = (_PVFV *) _encode_pointer (onexitbegin);
-   __onexitend = (_PVFV *) _encode_pointer (onexitend);
 diff --git a/mingw-w64-crt/crt/crtdll_compat.c b/mingw-w64-crt/crt/crtdll_compat.c
 new file mode 100644
 index 00000000..9bb48bd8
