@@ -98,6 +98,7 @@ case "$STEP" in
         mkdir -p gnu/mingw-w64/mingw-w64-crt/lib32
 
         (PATH="${PATH}:/build/ovr:/build/bin" && cd gnu/mingw-w64 && make CC=powerpcle-unknown-elf-gcc AR=powerpcle-unknown-elf-ar RANLIB=powerpcle-unknown-elf-ranlib CFLAGS="-I/build/lib/mingw-w64-headers/direct-x/include/" DLLTOOL=powerpcle-unknown-elf-dlltool CCAS="powerpcle-unknown-elf-gcc -D__powerpc__" DLLTOOLFLAGS32="" LD=powerpcle-unknown-elf-ld AS=powerpcle-unknown-elf-as install)
+
         cp /build/lib32/libcrtdll.a /build/lib32/libcrtdll_save_mingw.a
         cp /build/lib32/libmsvcrt.a /build/lib32/libmsvcrt_save_mingw.a
         (PATH="${PATH}:/build/ovr:/build/bin" && powerpcle-unknown-elf-dlltool -d gnu/crtdll.def -l /build/lib32/libcrtdll.a)
